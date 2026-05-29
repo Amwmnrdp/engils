@@ -1,0 +1,52 @@
+workflows:
+  android-apk:
+    name: Android APK Build
+    max_build_duration: 60
+    environment:
+      node: 22.15.0
+      java: 21
+      groups:
+        - keystore_credentials  # optional: for signed APK (set up in Codemagic env vars)
+    cache:
+      cache_paths:
+        - $HOME/.pnpm-store
+        - artifacts/mobile/node_modules
+        - node_modules
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm@latest
+          pnpm --version
+
+      - name: Install dependencies
+        script: |
+          pnpm install --frozen-lockfile
+
+      - name: Expo prebuild (generate Android native project)
+        script: |
+          cd artifacts/mobile
+          pnpm exec expo prebuild --platform android --clean --no-install
+
+      - name: Build Android APK (debug)
+        script: |
+          cd artifacts/mobile/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+    artifacts:
+      - artifacts/mobile/android/app/build/outputs/apk/debug/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com   # replace with your email
+        notify:
+          success: true
+          failure: true
