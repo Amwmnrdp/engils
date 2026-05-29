@@ -26,7 +26,9 @@ workflows:
           export COREPACK_ENABLE_STRICT=0
           export COREPACK_ENABLE_AUTO_PIN=0
           corepack enable
+          PNPM_VERSION=$(cat pnpm-workspace.yaml 2>/dev/null | grep 'packageManager' || echo "")
           pnpm --version
+          export npm_config_user_agent="pnpm/$(pnpm --version) npm/? node/$(node --version) linux x64"
           pnpm install --no-frozen-lockfile
 
       - name: Expo prebuild (generate Android native project)
