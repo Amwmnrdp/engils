@@ -25,14 +25,15 @@ workflows:
         script: |
           export COREPACK_ENABLE_STRICT=0
           export COREPACK_ENABLE_AUTO_PIN=0
+          corepack enable
           pnpm --version
-          pnpm install --no-frozen-lockfile --ignore-scripts
+          pnpm install --no-frozen-lockfile
 
       - name: Expo prebuild (generate Android native project)
         script: |
           export COREPACK_ENABLE_STRICT=0
           cd artifacts/mobile
-          pnpm exec expo prebuild --platform android --clean --no-install
+          pnpm exec expo prebuild --platform android --clean
 
       - name: Build Android APK (debug)
         script: |
