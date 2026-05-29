@@ -26,7 +26,7 @@ workflows:
         script: |
           corepack enable
           pnpm --version
-          pnpm install --no-frozen-lockfile
+          pnpm install --no-frozen-lockfile --ignore-scripts
 
       - name: Expo prebuild (generate Android native project)
         script: |
