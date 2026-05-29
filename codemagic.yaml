@@ -5,6 +5,9 @@ workflows:
     environment:
       node: 22.15.0
       java: 21
+      vars:
+        COREPACK_ENABLE_STRICT: "0"
+        COREPACK_ENABLE_AUTO_PIN: "0"
     cache:
       cache_paths:
         - $HOME/.pnpm-store
@@ -20,12 +23,14 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
-          which pnpm || npm install -g pnpm --force
+          export COREPACK_ENABLE_STRICT=0
+          export COREPACK_ENABLE_AUTO_PIN=0
           pnpm --version
           pnpm install --no-frozen-lockfile
 
       - name: Expo prebuild (generate Android native project)
         script: |
+          export COREPACK_ENABLE_STRICT=0
           cd artifacts/mobile
           pnpm exec expo prebuild --platform android --clean --no-install
 
@@ -41,7 +46,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com   # replace with your email
+          - your-email@example.com
         notify:
           success: true
           failure: true
