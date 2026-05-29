@@ -5,8 +5,6 @@ workflows:
     environment:
       node: 22.15.0
       java: 21
-      groups:
-        - keystore_credentials  # optional: for signed APK (set up in Codemagic env vars)
     cache:
       cache_paths:
         - $HOME/.pnpm-store
@@ -20,15 +18,11 @@ workflows:
           include: true
           source: true
     scripts:
-      - name: Enable pnpm
-        script: |
-          corepack enable
-          corepack prepare pnpm@latest --activate
-          pnpm --version
-
       - name: Install dependencies
         script: |
-          pnpm install --frozen-lockfile
+          which pnpm || npm install -g pnpm --force
+          pnpm --version
+          pnpm install --no-frozen-lockfile
 
       - name: Expo prebuild (generate Android native project)
         script: |
