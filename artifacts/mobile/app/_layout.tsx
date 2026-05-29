@@ -9,9 +9,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
-import { I18nManager } from "react-native";
+import { I18nManager, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -24,6 +23,14 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+function AppStack() {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    </Stack>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -35,7 +42,7 @@ export default function RootLayout() {
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-    }, 5000);
+    }, 3000);
 
     if (fontsLoaded || fontError) {
       clearTimeout(safetyTimeout);
@@ -47,6 +54,24 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
+  if (Platform.OS === "web") {
+    return (
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <AppProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <AppStack />
+              </GestureHandlerRootView>
+            </AppProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    );
+  }
+
+  const { KeyboardProvider } = require("react-native-keyboard-controller");
+
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
@@ -54,9 +79,7 @@ export default function RootLayout() {
           <AppProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                </Stack>
+                <AppStack />
               </KeyboardProvider>
             </GestureHandlerRootView>
           </AppProvider>
