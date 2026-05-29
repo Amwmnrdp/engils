@@ -20,9 +20,10 @@ workflows:
           include: true
           source: true
     scripts:
-      - name: Install pnpm
+      - name: Enable pnpm
         script: |
-          npm install -g pnpm@latest
+          corepack enable
+          corepack prepare pnpm@latest --activate
           pnpm --version
 
       - name: Install dependencies
