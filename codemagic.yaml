@@ -31,7 +31,7 @@ workflows:
       - name: Expo prebuild (generate Android native project)
         script: |
           cd artifacts/mobile
-          pnpm exec expo prebuild --platform android --clean
+          pnpm exec expo prebuild --platform android --clean --no-install
 
       - name: Build Android APK (debug)
         script: |
