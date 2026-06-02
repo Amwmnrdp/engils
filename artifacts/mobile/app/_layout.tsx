@@ -8,8 +8,8 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
-import { I18nManager, Platform } from "react-native";
+import React, { useEffect, useState } from "react";
+import { I18nManager, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -19,7 +19,7 @@ import { AppProvider } from "@/context/AppContext";
 I18nManager.allowRTL(true);
 I18nManager.forceRTL(true);
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
 
@@ -31,6 +31,35 @@ function AppStack() {
   );
 }
 
+function AppShell() {
+  if (Platform.OS === "web") {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AppStack />
+      </GestureHandlerRootView>
+    );
+  }
+
+  try {
+    const { KeyboardProvider } =
+      require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <KeyboardProvider>
+          <AppStack />
+        </KeyboardProvider>
+      </GestureHandlerRootView>
+    );
+  } catch (e) {
+    console.warn("[Layout] KeyboardProvider unavailable, falling back:", e);
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AppStack />
+      </GestureHandlerRootView>
+    );
+  }
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -39,49 +68,45 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  useEffect(() => {
-    const safetyTimeout = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-    }, 3000);
+  const [appReady, setAppReady] = useState(false);
 
-    if (fontsLoaded || fontError) {
-      clearTimeout(safetyTimeout);
-      SplashScreen.hideAsync().catch(() => {});
+  useEffect(() => {
+    async function hideSplash() {
+      try {
+        await SplashScreen.hideAsync();
+      } catch {
+        // splash may already be hidden
+      }
     }
 
-    return () => clearTimeout(safetyTimeout);
+    if (fontsLoaded || fontError) {
+      setAppReady(true);
+      hideSplash();
+      return;
+    }
+
+    // Safety: force show the app after 2.5 s even if fonts never resolve
+    const timer = setTimeout(() => {
+      console.warn("[Layout] Font loading timed out — rendering with fallback fonts");
+      setAppReady(true);
+      hideSplash();
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
-
-  if (Platform.OS === "web") {
-    return (
-      <SafeAreaProvider>
-        <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <AppProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <AppStack />
-              </GestureHandlerRootView>
-            </AppProvider>
-          </QueryClientProvider>
-        </ErrorBoundary>
-      </SafeAreaProvider>
-    );
+  // Return a solid background view (never null) so there is NO white screen
+  // while fonts are loading. The splash screen covers this during normal startup.
+  if (!appReady) {
+    return <View style={{ flex: 1, backgroundColor: "#ffffff" }} />;
   }
-
-  const { KeyboardProvider } = require("react-native-keyboard-controller");
 
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AppProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <AppStack />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <AppShell />
           </AppProvider>
         </QueryClientProvider>
       </ErrorBoundary>

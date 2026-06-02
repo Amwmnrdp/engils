@@ -30,12 +30,7 @@
     "plugins": [
       "expo-font",
       "expo-web-browser",
-      [
-        "expo-router",
-        {
-          "origin": "https://aqliyamaliya.app/"
-        }
-      ]
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true
