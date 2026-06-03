@@ -40,10 +40,12 @@ workflows:
           set -euo pipefail
           pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Patch build.gradle with arm64 ABI split
+      - name: Patch build.gradle
         script: |
           set -euo pipefail
           GRADLE="artifacts/mobile/android/app/build.gradle"
+
+          # 1. arm64-only ABI split
           if ! grep -q "splits" "$GRADLE"; then
             printf '\nandroid {\n    splits {\n        abi {\n            enable true\n            reset()\n            include "arm64-v8a"\n            universalApk false\n        }\n    }\n}\n' >> "$GRADLE"
             echo "ABI split block added."
@@ -51,45 +53,59 @@ workflows:
             echo "ABI split block already present — skipping."
           fi
 
-      - name: Bundle JS with Metro (via expo export:embed)
+          # 2. Ensure Gradle knows the full path to node (corepack/nvm installs
+          #    node in a path that sub-processes like Gradle may not see in PATH).
+          #    NODE_BINARY is the env-var read by the React Native Gradle plugin.
+          NODE_PATH_VAL=$(which node)
+          echo "Node binary: $NODE_PATH_VAL ($($NODE_PATH_VAL --version))"
+          PROPS="artifacts/mobile/android/gradle.properties"
+          if ! grep -q "NODE_BINARY" "$PROPS"; then
+            echo "" >> "$PROPS"
+            echo "# Path to node used by the React Native bundler task" >> "$PROPS"
+            echo "NODE_BINARY=$NODE_PATH_VAL" >> "$PROPS"
+            echo "NODE_BINARY written to gradle.properties."
+          else
+            echo "NODE_BINARY already present in gradle.properties — skipping."
+          fi
+
+      - name: Bundle JS with Metro (expo export:embed — shows full error if any)
         script: |
           set -euo pipefail
           cd artifacts/mobile
 
-          # Where Gradle expects the pre-built JS bundle and assets
           ASSETS_DIR="android/app/src/main/assets"
           RES_DIR="android/app/src/main/res"
           mkdir -p "$ASSETS_DIR" "$RES_DIR"
 
-          # expo export:embed is the exact command Gradle calls internally.
-          # We run it here directly so the full error is visible, then tell
-          # Gradle to skip re-bundling and use this output instead.
+          # Run the same command Gradle calls internally so any Metro/TS error
+          # is shown in full here rather than buried in Gradle output.
           pnpm exec expo export:embed \
             --platform android \
             --dev false \
             --bundle-output "$ASSETS_DIR/index.android.bundle" \
-            --assets-dest "$RES_DIR" \
-            --reset-cache
+            --assets-dest "$RES_DIR"
 
           echo "=== Bundle produced ==="
           ls -lh "$ASSETS_DIR/"
 
-      - name: Build release APK (Gradle, Metro skipped)
+      - name: Build release APK
         script: |
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
 
-          # -x createBundleReleaseJsAndAssets — explicitly excludes the Metro
-          # bundling task since we already built the bundle in the previous step
-          # and placed it in android/app/src/main/assets/.
-          ./gradlew assembleRelease -x createBundleReleaseJsAndAssets --no-daemon 2>&1 | tee /tmp/gradle.log
-          EXIT=$?
+          # NODE_BINARY is already set in gradle.properties (see patch step).
+          # --info makes Gradle print the full Metro/node subprocess output so
+          # any remaining errors are visible in the Codemagic log.
+          ./gradlew assembleRelease --no-daemon --info 2>&1 | tee /tmp/gradle.log
+          EXIT=${PIPESTATUS[0]}
           if [ $EXIT -ne 0 ]; then
             echo ""
-            echo "====== GRADLE ERROR SUMMARY ======"
-            grep -vE "^\s+at (org\.gradle|java\.|sun\.|com\.google)" /tmp/gradle.log | tail -60
-            echo "=================================="
+            echo "====== BUILD ERROR SUMMARY ======"
+            # Show Metro/node errors, skipping verbose Gradle stack frames
+            grep -E "(error |Error |FAILED|Cannot find module|SyntaxError|Module not found|node.*exit|^> Task)" \
+              /tmp/gradle.log | grep -v "^\s*at " | tail -80
+            echo "================================="
             exit $EXIT
           fi
 
