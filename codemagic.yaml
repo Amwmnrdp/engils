@@ -49,53 +49,34 @@ workflows:
           # 1. arm64-only ABI split
           if ! grep -q "splits" "$GRADLE"; then
             printf '\nandroid {\n    splits {\n        abi {\n            enable true\n            reset()\n            include "arm64-v8a"\n            universalApk false\n        }\n    }\n}\n' >> "$GRADLE"
-            echo "ABI split block added."
-          else
-            echo "ABI split block already present — skipping."
           fi
 
-          # 2. entryFile + metro config — RN plugin defaults to index.js (absent)
-          #    and does NOT pass --config to Metro, so Metro may not find our
-          #    custom metro.config.js (which sets up the pnpm/monorepo resolver).
-          #    Appending a second react{} block is valid; Groovy DSL merges them.
-          if ! grep -q "entryFile" "$GRADLE"; then
-            printf '\n// Monorepo fixes applied by Codemagic patch step\nreact {\n    entryFile = file("../../node_modules/expo-router/entry.js")\n    extraPackagerArgs = ["--config", file("../../metro.config.js").absolutePath]\n}\n' >> "$GRADLE"
-            echo "entryFile + metro config patch applied."
-          else
-            echo "entryFile already present — skipping patch."
+          # 2. Make Gradle use expo CLI (export:embed) instead of react-native bundle.
+          #    - cliFile  : expo CLI JS entry so "node <cliFile> <bundleCommand>" works
+          #    - bundleCommand : expo sub-command that accepts the same flags as bundle
+          #    - entryFile : expo-router entry (RN defaults to missing index.js)
+          #
+          #    Result command Gradle will run:
+          #      node node_modules/@expo/cli/build/bin/cli.js export:embed \
+          #        --platform android --dev false \
+          #        --bundle-output <path> --assets-dest <path> \
+          #        --entry-file node_modules/expo-router/entry.js
+          #
+          #    This is identical to what pnpm exec expo export:embed does, so it
+          #    always succeeds (same process that works in the pre-bundle step).
+          if ! grep -q "cliFile" "$GRADLE"; then
+            printf '\n// Monorepo: delegate bundling to expo CLI (avoids react-native bundle Babel issues)\nreact {\n    cliFile = file("../../node_modules/@expo/cli/build/bin/cli.js")\n    bundleCommand = "export:embed"\n    entryFile = file("../../node_modules/expo-router/entry.js")\n}\n' >> "$GRADLE"
           fi
 
-          # 3. NODE_BINARY — Gradle spawns node in a subprocess with a stripped
-          #    PATH; setting NODE_BINARY in gradle.properties tells the RN plugin
-          #    the absolute path to the node binary so it is always found.
+          # 3. NODE_BINARY — absolute path so Gradle subprocess always finds node
           NODE_BIN=$(which node)
-          echo "Node: $NODE_BIN ($($NODE_BIN --version))"
           if ! grep -q "NODE_BINARY" "$PROPS"; then
             printf '\nNODE_BINARY=%s\n' "$NODE_BIN" >> "$PROPS"
-            echo "NODE_BINARY written to gradle.properties."
-          else
-            echo "NODE_BINARY already present — skipping."
           fi
 
-      - name: Bundle JS with Metro (expo export:embed — shows full error if any)
-        script: |
-          set -euo pipefail
-          cd artifacts/mobile
-
-          ASSETS_DIR="android/app/src/main/assets"
-          RES_DIR="android/app/src/main/res"
-          mkdir -p "$ASSETS_DIR" "$RES_DIR"
-
-          # Run the identical command the Gradle plugin runs so any Metro/TS
-          # error is printed here in full — not buried in Gradle verbose output.
-          pnpm exec expo export:embed \
-            --platform android \
-            --dev false \
-            --bundle-output "$ASSETS_DIR/index.android.bundle" \
-            --assets-dest "$RES_DIR"
-
-          echo "=== Bundle produced ==="
-          ls -lh "$ASSETS_DIR/"
+          echo "Patches applied. NODE_BINARY=$NODE_BIN"
+          echo "--- patched react{} block ---"
+          grep -A 8 "Monorepo: delegate" "$GRADLE" || true
 
       - name: Build release APK
         script: |
@@ -108,32 +89,24 @@ workflows:
 
           if [ $EXIT -ne 0 ]; then
             echo ""
-            echo "====== ACTUAL ERROR (lines before first stack frame) ======"
-            # The real error message appears just before the first "at " stack
-            # frame line. -B5 captures 5 lines before each stack frame hit.
-            grep -m 1 -B 8 "at loadPrivatePartialConfig\|at loadFullConfig\|at Object\.transform\|SyntaxError\|Cannot find module\|Module not found" \
-              /tmp/gradle.log | grep -v "^--$" | head -20
-            echo "====== LAST 20 LINES ======"
-            tail -20 /tmp/gradle.log
-            echo "==================================================="
+            echo "====== ERROR ======"
+            grep -m 1 -B 6 "at loadFullConfig\|at Object\.transform\|SyntaxError\|Cannot find module\|Error:" \
+              /tmp/gradle.log | grep -v "^--$" | head -15
+            tail -15 /tmp/gradle.log
+            echo "==================="
             exit $EXIT
           fi
 
-      - name: Locate and rename APK to mali.apk
+      - name: Rename APK to mali.apk
         script: |
           set -euo pipefail
           OUTPUTS="artifacts/mobile/android/app/build/outputs"
-          echo "=== APK output tree ==="
-          find "$OUTPUTS" -name "*.apk" 2>/dev/null || echo "(no APKs found)"
           APK=$(find "$OUTPUTS" -name "*release*.apk" | head -1)
           if [ -z "$APK" ]; then
-            echo "ERROR: No release APK found under $OUTPUTS"
-            exit 1
+            echo "ERROR: No release APK found"; exit 1
           fi
-          DEST_DIR=$(dirname "$APK")
-          mv "$APK" "$DEST_DIR/mali.apk"
-          echo "Renamed to: $DEST_DIR/mali.apk"
-          ls -lh "$DEST_DIR/"
+          mv "$APK" "$(dirname "$APK")/mali.apk"
+          echo "Done: $(dirname "$APK")/mali.apk"
 
     artifacts:
       - artifacts/mobile/android/app/build/outputs/**/*.apk
