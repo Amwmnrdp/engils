@@ -55,9 +55,11 @@ workflows:
         script: |
           set -euo pipefail
           cd artifacts/mobile
-          # Bundle JS independently so any Babel/Metro error is fully visible
-          # in THIS step's log — not buried in Gradle's last-50-lines.
-          pnpm exec react-native bundle \
+          mkdir -p /tmp/android-assets
+          # expo export:embed is the exact command Gradle calls internally.
+          # Running it here surfaces any Babel/Metro error in full — not buried
+          # inside Gradle's truncated last-50-lines output.
+          pnpm exec expo export:embed \
             --platform android \
             --dev false \
             --entry-file node_modules/expo/AppEntry.js \
@@ -70,11 +72,7 @@ workflows:
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          # BUNDLE_SKIP_METRO: reuse the pre-built bundle from the step above
-          # so Gradle doesn't re-run Metro (avoids the buried-error problem).
-          ./gradlew assembleRelease --no-daemon \
-            -PbundleAssetName=index.android.bundle \
-            -PextraPackagerArgs="" 2>&1 | tee /tmp/gradle.log
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
           EXIT=$?
           if [ $EXIT -ne 0 ]; then
             echo ""
