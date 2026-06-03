@@ -56,13 +56,12 @@ workflows:
           set -euo pipefail
           cd artifacts/mobile
           mkdir -p /tmp/android-assets
-          # expo export:embed is the exact command Gradle calls internally.
-          # Running it here surfaces any Babel/Metro error in full — not buried
-          # inside Gradle's truncated last-50-lines output.
+          # expo export:embed mirrors what Gradle calls during assembleRelease.
+          # No --entry-file: Expo reads "main":"expo-router/entry" from package.json.
+          # Running here surfaces Babel/Metro errors fully in THIS step's log.
           pnpm exec expo export:embed \
             --platform android \
             --dev false \
-            --entry-file node_modules/expo/AppEntry.js \
             --bundle-output /tmp/index.android.bundle \
             --assets-dest /tmp/android-assets \
             --reset-cache
