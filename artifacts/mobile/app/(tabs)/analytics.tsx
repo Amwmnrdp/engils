@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Circle, G, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Path, Text as SvgText } from "react-native-svg";
 
 import { GlassCard } from "@/components/GlassCard";
 import { CATEGORY_COLORS, CATEGORY_NAMES } from "@/constants/quotes";
@@ -62,8 +62,6 @@ function DonutChart({
     const large = sweepAngle > 180 ? 1 : 0;
     return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} L ${si.x} ${si.y} A ${ir} ${ir} 0 ${large} 0 ${ei.x} ${ei.y} Z`;
   }
-
-  const { default: Path } = require("react-native-svg");
 
   return (
     <Svg width={size} height={size}>
