@@ -44,6 +44,7 @@ workflows:
         script: |
           set -euo pipefail
           GRADLE="artifacts/mobile/android/app/build.gradle"
+          PROPS="artifacts/mobile/android/gradle.properties"
 
           # 1. arm64-only ABI split
           if ! grep -q "splits" "$GRADLE"; then
@@ -53,19 +54,35 @@ workflows:
             echo "ABI split block already present — skipping."
           fi
 
-          # 2. Ensure Gradle knows the full path to node (corepack/nvm installs
-          #    node in a path that sub-processes like Gradle may not see in PATH).
-          #    NODE_BINARY is the env-var read by the React Native Gradle plugin.
-          NODE_PATH_VAL=$(which node)
-          echo "Node binary: $NODE_PATH_VAL ($($NODE_PATH_VAL --version))"
-          PROPS="artifacts/mobile/android/gradle.properties"
+          # 2. entryFile — RN Gradle plugin defaults to index.js which does not
+          #    exist in this project (entry is expo-router/entry via package.json
+          #    "main" field). We append a second react{} block; Groovy DSL merges
+          #    multiple react{} blocks so this safely overrides without touching
+          #    the expo-generated block.
+          if ! grep -q "entryFile" "$GRADLE"; then
+            cat >> "$GRADLE" << 'GROOVY'
+
+// Monorepo/expo-router: use the correct entry file for the RN bundler.
+// Without this, the Gradle plugin defaults to "index.js" which is absent.
+react {
+    entryFile = file("../../node_modules/expo-router/entry.js")
+}
+GROOVY
+            echo "entryFile patch applied."
+          else
+            echo "entryFile already present — skipping."
+          fi
+
+          # 3. NODE_BINARY — Gradle spawns node in a subprocess with a stripped
+          #    PATH; setting NODE_BINARY in gradle.properties tells the RN plugin
+          #    the absolute path to the node binary so it is always found.
+          NODE_BIN=$(which node)
+          echo "Node: $NODE_BIN ($($NODE_BIN --version))"
           if ! grep -q "NODE_BINARY" "$PROPS"; then
-            echo "" >> "$PROPS"
-            echo "# Path to node used by the React Native bundler task" >> "$PROPS"
-            echo "NODE_BINARY=$NODE_PATH_VAL" >> "$PROPS"
+            printf '\nNODE_BINARY=%s\n' "$NODE_BIN" >> "$PROPS"
             echo "NODE_BINARY written to gradle.properties."
           else
-            echo "NODE_BINARY already present in gradle.properties — skipping."
+            echo "NODE_BINARY already present — skipping."
           fi
 
       - name: Bundle JS with Metro (expo export:embed — shows full error if any)
@@ -77,8 +94,8 @@ workflows:
           RES_DIR="android/app/src/main/res"
           mkdir -p "$ASSETS_DIR" "$RES_DIR"
 
-          # Run the same command Gradle calls internally so any Metro/TS error
-          # is shown in full here rather than buried in Gradle output.
+          # Run the identical command the Gradle plugin runs so any Metro/TS
+          # error is printed here in full — not buried in Gradle verbose output.
           pnpm exec expo export:embed \
             --platform android \
             --dev false \
@@ -94,18 +111,23 @@ workflows:
           cd artifacts/mobile/android
           chmod +x gradlew
 
-          # NODE_BINARY is already set in gradle.properties (see patch step).
-          # --info makes Gradle print the full Metro/node subprocess output so
-          # any remaining errors are visible in the Codemagic log.
-          ./gradlew assembleRelease --no-daemon --info 2>&1 | tee /tmp/gradle.log
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
           EXIT=${PIPESTATUS[0]}
+
           if [ $EXIT -ne 0 ]; then
             echo ""
-            echo "====== BUILD ERROR SUMMARY ======"
-            # Show Metro/node errors, skipping verbose Gradle stack frames
-            grep -E "(error |Error |FAILED|Cannot find module|SyntaxError|Module not found|node.*exit|^> Task)" \
-              /tmp/gradle.log | grep -v "^\s*at " | tail -80
-            echo "================================="
+            echo "====== BUNDLE TASK OUTPUT (Metro/node error) ======"
+            # Extract everything the bundleRelease task printed to stdout/stderr.
+            # With --info Gradle prefixes subprocess output with the task name;
+            # without it, the subprocess writes directly to the log stream.
+            awk '
+              /> Task :app:createBundleRelease/ { p=1 }
+              p { print }
+              /^> Task :/ && !/createBundleRelease/ { p=0 }
+            ' /tmp/gradle.log | head -120
+            echo "====== LAST 30 LINES ======"
+            tail -30 /tmp/gradle.log
+            echo "==================================================="
             exit $EXIT
           fi
 
