@@ -14,7 +14,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -328,8 +327,6 @@ function AddGoalModal({
 
 export default function GoalsScreen() {
   const colors = useColors();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
   const { goals } = useApp();
   const [showAdd, setShowAdd] = useState(false);
 
@@ -342,13 +339,13 @@ export default function GoalsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
+        barStyle={colors.isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
       <LinearGradient
         colors={
-          isDark
+          colors.isDark
             ? ["#070D1B", "#0A1628", "#070D1B"]
             : ["#EEF2FF", "#E0E8FF", "#EEF2FF"]
         }

@@ -46,6 +46,8 @@ export interface AppSettings {
   currency: string;
   emergencyMode: boolean;
   soundEnabled: boolean;
+  notificationsEnabled: boolean;
+  onboardingCompleted: boolean;
 }
 
 export interface AIInsight {
@@ -59,9 +61,7 @@ interface AppContextType {
   income: number;
   setIncome: (amount: number) => Promise<void>;
   expenses: Expense[];
-  addExpense: (
-    expense: Omit<Expense, "id" | "createdAt">
-  ) => Promise<void>;
+  addExpense: (expense: Omit<Expense, "id" | "createdAt">) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   markExpensePaid: (id: string) => Promise<void>;
   goals: SavingsGoal[];
@@ -71,10 +71,13 @@ interface AppContextType {
   settings: AppSettings;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
   clearAllData: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
+  restartOnboarding: () => Promise<void>;
   aiInsights: AIInsight[];
   financialScore: number;
   totalSpent: number;
   remainingBalance: number;
+  spentPercent: number;
   isLoaded: boolean;
 }
 
@@ -82,6 +85,8 @@ const defaultSettings: AppSettings = {
   currency: "SAR",
   emergencyMode: false,
   soundEnabled: true,
+  notificationsEnabled: true,
+  onboardingCompleted: false,
 };
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -182,13 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setGoals((prev) => {
         const updated = prev.map((g) =>
           g.id === id
-            ? {
-                ...g,
-                savedAmount: Math.min(
-                  g.targetAmount,
-                  g.savedAmount + amount
-                ),
-              }
+            ? { ...g, savedAmount: Math.min(g.targetAmount, g.savedAmount + amount) }
             : g
         );
         AsyncStorage.setItem("goals", JSON.stringify(updated)).catch(() => {});
@@ -202,9 +201,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async (newSettings: Partial<AppSettings>) => {
       setSettings((prev) => {
         const updated = { ...prev, ...newSettings };
-        AsyncStorage.setItem("settings", JSON.stringify(updated)).catch(
-          () => {}
-        );
+        AsyncStorage.setItem("settings", JSON.stringify(updated)).catch(() => {});
         return updated;
       });
     },
@@ -212,21 +209,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearAllData = useCallback(async () => {
-    await AsyncStorage.multiRemove([
-      "income",
-      "expenses",
-      "goals",
-      "settings",
-    ]);
+    await AsyncStorage.multiRemove(["income", "expenses", "goals", "settings"]);
     setIncomeState(0);
     setExpenses([]);
     setGoals([]);
     setSettings(defaultSettings);
   }, []);
 
+  const completeOnboarding = useCallback(async () => {
+    await updateSettings({ onboardingCompleted: true });
+  }, [updateSettings]);
+
+  const restartOnboarding = useCallback(async () => {
+    await updateSettings({ onboardingCompleted: false });
+  }, [updateSettings]);
+
   const unpaidExpenses = expenses.filter((e) => !e.paid);
   const totalSpent = unpaidExpenses.reduce((sum, e) => sum + e.amount, 0);
   const remainingBalance = income - totalSpent;
+  const spentPercent = income > 0 ? Math.min((totalSpent / income) * 100, 100) : 0;
 
   const financialScore = (() => {
     if (income <= 0) return 50;
@@ -235,9 +236,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (ratio > 0.9) score -= 40;
     else if (ratio > 0.7) score -= 25;
     else if (ratio > 0.5) score -= 10;
-    const highCount = unpaidExpenses.filter(
-      (e) => e.importance === "high"
-    ).length;
+    const highCount = unpaidExpenses.filter((e) => e.importance === "high").length;
     score -= highCount * 5;
     if (settings.emergencyMode) score -= 5;
     return Math.max(0, Math.min(100, Math.round(score)));
@@ -247,36 +246,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (income <= 0) return [];
     const insights: AIInsight[] = [];
     const today = new Date();
-    const daysInMonth = new Date(
-      today.getFullYear(),
-      today.getMonth() + 1,
-      0
-    ).getDate();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     const daysPassed = today.getDate();
-    const dailyRate = totalSpent / Math.max(daysPassed, 1);
-    const projectedSpend = dailyRate * daysInMonth;
-    const projectedRemaining = income - projectedSpend;
 
-    if (projectedRemaining < 0) {
+    // Only project if we have enough days of data (≥5 days)
+    // and use only THIS month's expenses to avoid skewed daily rates
+    const thisMonthExpenses = unpaidExpenses.filter((e) => {
+      const created = new Date(e.createdAt);
+      return (
+        created.getMonth() === today.getMonth() &&
+        created.getFullYear() === today.getFullYear()
+      );
+    });
+
+    const spentThisMonth = thisMonthExpenses.reduce((s, e) => s + e.amount, 0);
+
+    if (spentThisMonth > income) {
       insights.push({
-        id: "proj",
+        id: "over",
         type: "warning",
-        message: `تحذير: بمعدل صرفك الحالي ستتجاوز ميزانيتك بـ ${Math.abs(Math.round(projectedRemaining)).toLocaleString("ar-SA")} ${settings.currency}.`,
+        message: `تجاوزت ميزانيتك! صرفت ${spentThisMonth.toLocaleString("ar-SA")} ${settings.currency} من أصل ${income.toLocaleString("ar-SA")} ${settings.currency}.`,
         icon: "alert-triangle",
       });
-    } else {
+    } else if (daysPassed >= 5) {
+      const dailyRate = spentThisMonth / daysPassed;
+      const projectedSpend = dailyRate * daysInMonth;
+      const projectedRemaining = income - projectedSpend;
+      if (projectedRemaining < 0) {
+        insights.push({
+          id: "proj",
+          type: "warning",
+          message: `بمعدل إنفاقك الحالي قد تتجاوز ميزانيتك بـ ${Math.abs(Math.round(projectedRemaining)).toLocaleString("ar-SA")} ${settings.currency} نهاية الشهر.`,
+          icon: "alert-triangle",
+        });
+      } else {
+        insights.push({
+          id: "proj",
+          type: "info",
+          message: `بمعدل إنفاقك الحالي سيتبقى معك نحو ${Math.round(projectedRemaining).toLocaleString("ar-SA")} ${settings.currency} نهاية الشهر.`,
+          icon: "trending-up",
+        });
+      }
+    } else if (spentPercent > 0) {
       insights.push({
-        id: "proj",
-        type: "info",
-        message: `بمعدل صرفك الحالي قد يتبقى معك ${Math.round(projectedRemaining).toLocaleString("ar-SA")} ${settings.currency} نهاية الشهر.`,
-        icon: "trending-up",
+        id: "pct",
+        type: spentPercent > 70 ? "warning" : "info",
+        message: `صرفت حتى الآن ${Math.round(spentPercent)}٪ من دخلك الشهري.`,
+        icon: "percent",
       });
     }
 
     const categoryTotals: Record<string, number> = {};
     unpaidExpenses.forEach((e) => {
-      categoryTotals[e.category] =
-        (categoryTotals[e.category] || 0) + e.amount;
+      categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
     });
     const sorted = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
     if (sorted.length > 0) {
@@ -284,7 +306,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const pct = Math.round((topAmt / income) * 100);
       insights.push({
         id: "cat",
-        type: pct > 30 ? "warning" : "tip",
+        type: pct > 35 ? "warning" : "tip",
         message: `مصاريف ${CATEGORY_NAMES[topCat] || topCat} تمثل ${pct}٪ من دخلك الشهري.`,
         icon: "pie-chart",
       });
@@ -292,9 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const urgentCount = unpaidExpenses.filter((e) => {
       const dl = new Date(e.deadline);
-      const daysLeft = Math.ceil(
-        (dl.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const daysLeft = Math.ceil((dl.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       return daysLeft >= 0 && daysLeft <= 3;
     }).length;
 
@@ -302,7 +322,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       insights.push({
         id: "urgent",
         type: "warning",
-        message: `لديك ${urgentCount} مصروف يستحق خلال 3 أيام القادمة!`,
+        message: `لديك ${urgentCount} مصروف يستحق خلال 3 أيام — لا تنسَ السداد!`,
         icon: "clock",
       });
     }
@@ -311,7 +331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       insights.push({
         id: "score",
         type: "success",
-        message: "رائع! إدارتك المالية ممتازة هذا الشهر. واصل!",
+        message: "رائع! إدارتك المالية ممتازة هذا الشهر، واصل!",
         icon: "star",
       });
     }
@@ -335,10 +355,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settings,
         updateSettings,
         clearAllData,
+        completeOnboarding,
+        restartOnboarding,
         aiInsights,
         financialScore,
         totalSpent,
         remainingBalance,
+        spentPercent,
         isLoaded,
       }}
     >

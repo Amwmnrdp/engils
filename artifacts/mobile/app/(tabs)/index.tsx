@@ -13,7 +13,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -28,14 +27,12 @@ import { useColors } from "@/hooks/useColors";
 
 export default function HomeScreen() {
   const colors = useColors();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
   const {
     income,
     setIncome,
     totalSpent,
     remainingBalance,
-    financialScore,
+    spentPercent,
     aiInsights,
     expenses,
     settings,
@@ -51,45 +48,21 @@ export default function HomeScreen() {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 700,
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
     ]).start();
 
     Animated.loop(
       Animated.sequence([
-        Animated.timing(orb1Y, {
-          toValue: -18,
-          duration: 3500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(orb1Y, {
-          toValue: 0,
-          duration: 3500,
-          useNativeDriver: true,
-        }),
+        Animated.timing(orb1Y, { toValue: -18, duration: 3500, useNativeDriver: true }),
+        Animated.timing(orb1Y, { toValue: 0, duration: 3500, useNativeDriver: true }),
       ])
     ).start();
 
     Animated.loop(
       Animated.sequence([
-        Animated.timing(orb2Y, {
-          toValue: 15,
-          duration: 4200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(orb2Y, {
-          toValue: 0,
-          duration: 4200,
-          useNativeDriver: true,
-        }),
+        Animated.timing(orb2Y, { toValue: 15, duration: 4200, useNativeDriver: true }),
+        Animated.timing(orb2Y, { toValue: 0, duration: 4200, useNativeDriver: true }),
       ])
     ).start();
   }, []);
@@ -102,7 +75,6 @@ export default function HomeScreen() {
     }
   };
 
-  const spentPercent = income > 0 ? Math.min((totalSpent / income) * 100, 100) : 0;
   const quote = getDailyQuote();
   const today = new Date();
   const dateStr = today.toLocaleDateString("ar-SA", {
@@ -114,17 +86,26 @@ export default function HomeScreen() {
 
   const recentExpenses = expenses.filter((e) => !e.paid).slice(0, 3);
 
+  const spentColor =
+    spentPercent < 50
+      ? colors.success
+      : spentPercent < 75
+      ? colors.warning
+      : spentPercent < 90
+      ? "#FF9800"
+      : colors.danger;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
+        barStyle={colors.isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
 
       <LinearGradient
         colors={
-          isDark
+          colors.isDark
             ? ["#070D1B", "#0A1628", "#070D1B"]
             : ["#EEF2FF", "#E0E8FF", "#EEF2FF"]
         }
@@ -134,19 +115,13 @@ export default function HomeScreen() {
       <Animated.View
         style={[
           styles.orb1,
-          {
-            backgroundColor: colors.primary + "22",
-            transform: [{ translateY: orb1Y }],
-          },
+          { backgroundColor: colors.primary + "22", transform: [{ translateY: orb1Y }] },
         ]}
       />
       <Animated.View
         style={[
           styles.orb2,
-          {
-            backgroundColor: colors.secondary + "18",
-            transform: [{ translateY: orb2Y }],
-          },
+          { backgroundColor: colors.secondary + "18", transform: [{ translateY: orb2Y }] },
         ]}
       />
 
@@ -157,23 +132,15 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            }}
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
           >
             <View style={styles.topBar}>
-              <View style={[styles.scoreBadge, { backgroundColor: colors.primary + "22", borderColor: colors.primary + "44" }]}>
-                <Text style={[styles.scoreBadgeText, { color: colors.primary }]}>
-                  {financialScore}/100
-                </Text>
-              </View>
               <View style={styles.greetingBlock}>
                 <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
                   {dateStr}
                 </Text>
                 <Text style={[styles.greeting, { color: colors.foreground }]}>
-                  عقلية مالية
+                  عقلية مالية 💰
                 </Text>
               </View>
             </View>
@@ -182,14 +149,19 @@ export default function HomeScreen() {
               <GlassCard style={styles.balanceCard} padding={0}>
                 <LinearGradient
                   colors={
-                    isDark
+                    colors.isDark
                       ? ["#00D4FF18", "#8B5CF618", "#00D4FF08"]
                       : ["#005EFF18", "#7C3AED18", "#005EFF08"]
                   }
                   style={[styles.balanceGradient, { borderRadius: colors.radius }]}
                 >
                   <View style={styles.balanceTop}>
-                    <ScoreRing score={financialScore} size={100} />
+                    <View style={styles.ringWrapper}>
+                      <ScoreRing spentPercent={spentPercent} size={100} />
+                      <Text style={[styles.ringLabel, { color: colors.mutedForeground }]}>
+                        من الدخل
+                      </Text>
+                    </View>
                     <View style={styles.balanceRight}>
                       <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>
                         الرصيد المتبقي
@@ -200,10 +172,7 @@ export default function HomeScreen() {
                         style={StyleSheet.flatten([
                           styles.balanceAmount,
                           {
-                            color:
-                              remainingBalance < 0
-                                ? colors.danger
-                                : colors.foreground,
+                            color: remainingBalance < 0 ? colors.danger : colors.foreground,
                           },
                         ])}
                       />
@@ -233,33 +202,27 @@ export default function HomeScreen() {
 
                   <View style={styles.progressSection}>
                     <View style={styles.progressHeader}>
-                      <Text style={[styles.progressPct, { color: colors.mutedForeground }]}>
-                        {Math.round(spentPercent)}٪ تم صرفه
+                      <Text style={[styles.progressPct, { color: spentColor, fontWeight: "700" }]}>
+                        {Math.round(spentPercent)}٪ تم إنفاقه
                       </Text>
                       <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
-                        نسبة الإنفاق
+                        نسبة الإنفاق من الدخل
                       </Text>
                     </View>
-                    <View
-                      style={[
-                        styles.progressBar,
-                        { backgroundColor: colors.muted },
-                      ]}
-                    >
+                    <View style={[styles.progressBar, { backgroundColor: colors.muted }]}>
                       <LinearGradient
                         colors={
-                          spentPercent > 80
+                          spentPercent > 90
                             ? ["#FF4B4B", "#FF8B8B"]
-                            : spentPercent > 60
+                            : spentPercent > 75
+                            ? ["#FF9800", "#FFB74D"]
+                            : spentPercent > 50
                             ? ["#FFB700", "#FFD966"]
-                            : [colors.primary, colors.secondary]
+                            : [colors.success, "#4ADE80"]
                         }
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
-                        style={[
-                          styles.progressFill,
-                          { width: `${spentPercent}%` },
-                        ]}
+                        style={[styles.progressFill, { width: `${Math.max(spentPercent, 2)}%` }]}
                       />
                     </View>
                   </View>
@@ -278,14 +241,12 @@ export default function HomeScreen() {
             ) : (
               <GlassCard style={styles.incomeCard}>
                 <Text style={[styles.incomeTitle, { color: colors.foreground }]}>
-                  أدخل المبلغ الشهري
+                  ما هو دخلك الشهري؟
                 </Text>
                 <Text style={[styles.incomeSubtitle, { color: colors.mutedForeground }]}>
-                  أدخل دخلك الشهري لبدء تتبع مصاريفك
+                  أدخل دخلك الشهري لنبدأ تتبع مصاريفك وإدارة أموالك بذكاء
                 </Text>
-                <KeyboardAvoidingView
-                  behavior={Platform.OS === "ios" ? "padding" : "height"}
-                >
+                <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
                   <TextInput
                     style={[
                       styles.incomeInput,
@@ -295,7 +256,7 @@ export default function HomeScreen() {
                         color: colors.foreground,
                       },
                     ]}
-                    placeholder="0.00"
+                    placeholder="مثال: 5000"
                     placeholderTextColor={colors.mutedForeground}
                     keyboardType="numeric"
                     value={incomeInput}
@@ -306,8 +267,9 @@ export default function HomeScreen() {
                     style={[styles.startBtn, { backgroundColor: colors.primary }]}
                     onPress={handleSetIncome}
                   >
+                    <Feather name="check" size={18} color={colors.primaryForeground} />
                     <Text style={[styles.startBtnText, { color: colors.primaryForeground }]}>
-                      ابدأ
+                      ابدأ المتابعة
                     </Text>
                   </TouchableOpacity>
                 </KeyboardAvoidingView>
@@ -334,9 +296,9 @@ export default function HomeScreen() {
             {recentExpenses.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Feather name="list" size={14} color={colors.mutedForeground} />
+                  <Feather name="clock" size={14} color={colors.mutedForeground} />
                   <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-                    أقرب المصاريف
+                    مصاريف غير مدفوعة
                   </Text>
                 </View>
                 {recentExpenses.map((exp) => (
@@ -351,10 +313,13 @@ export default function HomeScreen() {
                       },
                     ]}
                   >
-                    <Text style={[styles.miniAmount, { color: colors.primary }]}>
+                    <Text style={[styles.miniAmount, { color: colors.danger }]}>
                       {exp.amount.toLocaleString("ar-SA")} {settings.currency}
                     </Text>
-                    <Text style={[styles.miniName, { color: colors.foreground }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.miniName, { color: colors.foreground }]}
+                      numberOfLines={1}
+                    >
                       {exp.name}
                     </Text>
                   </View>
@@ -371,7 +336,7 @@ export default function HomeScreen() {
               >
                 <Feather name="shield" size={16} color={colors.danger} />
                 <Text style={[styles.emergencyText, { color: colors.danger }]}>
-                  وضع الطوارئ مفعّل — كن حذراً في الإنفاق
+                  وضع الطوارئ مفعّل — كن حذراً في كل إنفاق
                 </Text>
               </View>
             )}
@@ -440,18 +405,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginBottom: 2,
   },
-  scoreBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 6,
-  },
-  scoreBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-  },
   balanceCard: { marginBottom: 14 },
   balanceGradient: { padding: 18 },
   balanceTop: {
@@ -459,6 +412,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
     marginBottom: 16,
+  },
+  ringWrapper: { alignItems: "center", gap: 4 },
+  ringLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
   },
   balanceRight: { flex: 1, alignItems: "flex-end" },
   balanceLabel: {
@@ -489,28 +448,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontFamily: "Inter_600SemiBold",
   },
-  metaLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  metaDivider: {
-    width: 1,
-    height: 20,
-  },
+  metaLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  metaDivider: { width: 1, height: 20 },
   progressSection: { marginTop: 4 },
   progressHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     marginBottom: 6,
   },
-  progressLabel: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  progressPct: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: { height: "100%", borderRadius: 4 },
+  progressLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  progressPct: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  progressBar: { height: 10, borderRadius: 5, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 5 },
   changeIncomeBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -521,17 +470,18 @@ const styles = StyleSheet.create({
   changeIncomeTxt: { fontSize: 11, fontFamily: "Inter_400Regular" },
   incomeCard: { marginBottom: 14 },
   incomeTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     fontFamily: "Inter_700Bold",
     textAlign: "center",
-    marginBottom: 6,
+    marginBottom: 8,
   },
   incomeSubtitle: {
     fontSize: 13,
     textAlign: "center",
     fontFamily: "Inter_400Regular",
-    marginBottom: 16,
+    marginBottom: 20,
+    lineHeight: 20,
   },
   incomeInput: {
     borderWidth: 1,
@@ -546,6 +496,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 16,
     alignItems: "center",
+    flexDirection: "row-reverse",
+    justifyContent: "center",
+    gap: 8,
   },
   startBtnText: {
     fontSize: 17,
@@ -553,11 +506,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
   },
   quoteCard: { marginBottom: 14 },
-  quoteRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-  },
+  quoteRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   quoteIcon: {
     width: 34,
     height: 34,
@@ -600,7 +549,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     flex: 1,
     textAlign: "right",
-    marginRight: 0,
   },
   miniAmount: {
     fontSize: 14,

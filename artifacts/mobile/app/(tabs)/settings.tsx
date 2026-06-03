@@ -12,13 +12,13 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/GlassCard";
 import { CURRENCIES } from "@/constants/quotes";
 import { useApp } from "@/context/AppContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 
 function SettingRow({
@@ -36,9 +36,7 @@ function SettingRow({
 }) {
   const colors = useColors();
   return (
-    <View
-      style={[styles.settingRow, { borderBottomColor: colors.border }]}
-    >
+    <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
       <View style={styles.settingRight}>
         <View
           style={[
@@ -46,23 +44,14 @@ function SettingRow({
             { backgroundColor: (color || colors.primary) + "22" },
           ]}
         >
-          <Feather
-            name={icon as any}
-            size={16}
-            color={color || colors.primary}
-          />
+          <Feather name={icon as any} size={16} color={color || colors.primary} />
         </View>
         <View style={styles.settingText}>
           <Text style={[styles.settingTitle, { color: colors.foreground }]}>
             {title}
           </Text>
           {subtitle ? (
-            <Text
-              style={[
-                styles.settingSubtitle,
-                { color: colors.mutedForeground },
-              ]}
-            >
+            <Text style={[styles.settingSubtitle, { color: colors.mutedForeground }]}>
               {subtitle}
             </Text>
           ) : null}
@@ -73,22 +62,27 @@ function SettingRow({
   );
 }
 
+type ThemeOption = "light" | "dark" | "auto";
+
+const THEME_OPTIONS: { value: ThemeOption; label: string; icon: string }[] = [
+  { value: "light", label: "فاتح", icon: "sun" },
+  { value: "dark", label: "داكن", icon: "moon" },
+  { value: "auto", label: "تلقائي", icon: "smartphone" },
+];
+
 export default function SettingsScreen() {
   const colors = useColors();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-  const { settings, updateSettings, clearAllData, income, expenses, goals } =
+  const { theme, setTheme } = useTheme();
+  const { settings, updateSettings, clearAllData, income, expenses, goals, restartOnboarding } =
     useApp();
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
-  const selectedCurrency = CURRENCIES.find(
-    (c) => c.code === settings.currency
-  );
+  const selectedCurrency = CURRENCIES.find((c) => c.code === settings.currency);
 
   const handleReset = () => {
     Alert.alert(
       "مسح جميع البيانات",
-      "هل أنت متأكد؟ سيتم حذف جميع المصاريف والأهداف والدخل بشكل نهائي.",
+      "هل أنت متأكد؟ سيتم حذف جميع المصاريف والأهداف والدخل بشكل نهائي ولا يمكن التراجع.",
       [
         { text: "إلغاء", style: "cancel" },
         {
@@ -96,9 +90,33 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             await clearAllData();
-            Haptics.notificationAsync(
-              Haptics.NotificationFeedbackType.Warning
-            );
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleTestNotification = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert(
+      "✅ الإشعارات تعمل",
+      "تم استلام الإشعار بنجاح! الإشعارات مفعّلة على جهازك.",
+      [{ text: "حسناً" }]
+    );
+  };
+
+  const handleReplayOnboarding = () => {
+    Alert.alert(
+      "إعادة الشرح",
+      "هل تريد إعادة عرض شرح التطبيق من البداية؟",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "نعم، أعِد الشرح",
+          onPress: async () => {
+            await restartOnboarding();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           },
         },
       ]
@@ -108,13 +126,13 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
+        barStyle={colors.isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
       <LinearGradient
         colors={
-          isDark
+          colors.isDark
             ? ["#070D1B", "#0A1628", "#070D1B"]
             : ["#EEF2FF", "#E0E8FF", "#EEF2FF"]
         }
@@ -128,9 +146,7 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>
-              الإعدادات
-            </Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>الإعدادات</Text>
             <Feather name="settings" size={22} color={colors.primary} />
           </View>
 
@@ -140,37 +156,25 @@ export default function SettingsScreen() {
                 <Text style={[styles.statNum, { color: colors.primary }]}>
                   {expenses.length}
                 </Text>
-                <Text
-                  style={[styles.statLbl, { color: colors.mutedForeground }]}
-                >
+                <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>
                   مصروف
                 </Text>
               </View>
-              <View
-                style={[styles.statDiv, { backgroundColor: colors.border }]}
-              />
+              <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <Text style={[styles.statNum, { color: colors.accent }]}>
                   {goals.length}
                 </Text>
-                <Text
-                  style={[styles.statLbl, { color: colors.mutedForeground }]}
-                >
+                <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>
                   هدف
                 </Text>
               </View>
-              <View
-                style={[styles.statDiv, { backgroundColor: colors.border }]}
-              />
+              <View style={[styles.statDiv, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <Text style={[styles.statNum, { color: colors.success }]}>
-                  {income > 0
-                    ? `${income.toLocaleString("ar-SA")}`
-                    : "---"}
+                  {income > 0 ? income.toLocaleString("ar-SA") : "---"}
                 </Text>
-                <Text
-                  style={[styles.statLbl, { color: colors.mutedForeground }]}
-                >
+                <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>
                   الدخل
                 </Text>
               </View>
@@ -207,97 +211,140 @@ export default function SettingsScreen() {
 
             <SettingRow
               icon="moon"
-              title="الوضع الليلي"
-              subtitle="يتبع إعدادات الجهاز"
+              title="مظهر التطبيق"
+              subtitle="اختر بين الفاتح أو الداكن"
               color={colors.secondary}
             >
-              <View
-                style={[
-                  styles.autoTag,
-                  { backgroundColor: colors.muted },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.autoTagText,
-                    { color: colors.mutedForeground },
-                  ]}
-                >
-                  تلقائي
-                </Text>
+              <View style={styles.themeSelector}>
+                {THEME_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    onPress={() => {
+                      setTheme(opt.value);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    style={[
+                      styles.themeBtn,
+                      {
+                        backgroundColor:
+                          theme === opt.value
+                            ? colors.secondary + "33"
+                            : colors.muted,
+                        borderColor:
+                          theme === opt.value ? colors.secondary : "transparent",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={opt.icon as any}
+                      size={12}
+                      color={
+                        theme === opt.value
+                          ? colors.secondary
+                          : colors.mutedForeground
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.themeBtnText,
+                        {
+                          color:
+                            theme === opt.value
+                              ? colors.secondary
+                              : colors.mutedForeground,
+                        },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </SettingRow>
 
             <SettingRow
               icon="bell"
               title="الإشعارات"
+              subtitle="تنبيهات المصاريف والأهداف"
               color={colors.primary}
             >
               <Switch
-                value={settings.soundEnabled}
-                onValueChange={(v) => updateSettings({ soundEnabled: v })}
-                trackColor={{
-                  false: colors.muted,
-                  true: colors.primary + "88",
-                }}
-                thumbColor={settings.soundEnabled ? colors.primary : colors.mutedForeground}
+                value={settings.notificationsEnabled}
+                onValueChange={(v) => updateSettings({ notificationsEnabled: v })}
+                trackColor={{ false: colors.muted, true: colors.primary + "88" }}
+                thumbColor={settings.notificationsEnabled ? colors.primary : colors.mutedForeground}
               />
             </SettingRow>
 
             <SettingRow
               icon="volume-2"
-              title="الأصوات"
-              color={colors.secondary}
+              title="الأصوات والاهتزاز"
+              subtitle="صوت عند إضافة المصاريف"
+              color={colors.success}
             >
               <Switch
                 value={settings.soundEnabled}
                 onValueChange={(v) => updateSettings({ soundEnabled: v })}
-                trackColor={{
-                  false: colors.muted,
-                  true: colors.secondary + "88",
-                }}
-                thumbColor={settings.soundEnabled ? colors.secondary : colors.mutedForeground}
+                trackColor={{ false: colors.muted, true: colors.success + "88" }}
+                thumbColor={settings.soundEnabled ? colors.success : colors.mutedForeground}
               />
             </SettingRow>
 
             <SettingRow
               icon="shield"
               title="وضع الطوارئ"
-              subtitle="تحذير عند كل إنفاق"
+              subtitle="تحذير مرئي عند كل إنفاق"
               color={colors.danger}
             >
               <Switch
                 value={settings.emergencyMode}
                 onValueChange={(v) => {
                   updateSettings({ emergencyMode: v });
-                  if (v)
-                    Haptics.notificationAsync(
-                      Haptics.NotificationFeedbackType.Warning
-                    );
+                  if (v) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                 }}
-                trackColor={{
-                  false: colors.muted,
-                  true: colors.danger + "88",
-                }}
+                trackColor={{ false: colors.muted, true: colors.danger + "88" }}
                 thumbColor={settings.emergencyMode ? colors.danger : colors.mutedForeground}
               />
             </SettingRow>
+
+            {settings.notificationsEnabled && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" },
+                ]}
+                onPress={handleTestNotification}
+              >
+                <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                  اختبار الإشعارات
+                </Text>
+                <Feather name="bell" size={15} color={colors.primary} />
+              </TouchableOpacity>
+            )}
           </GlassCard>
 
           <GlassCard style={styles.section}>
-            <Text
-              style={[styles.sectionTitle, { color: colors.mutedForeground }]}
-            >
-              البيانات
+            <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
+              المساعدة والبيانات
             </Text>
 
             <TouchableOpacity
               style={[
+                styles.actionBtn,
+                { backgroundColor: colors.secondary + "18", borderColor: colors.secondary + "44" },
+              ]}
+              onPress={handleReplayOnboarding}
+            >
+              <Text style={[styles.actionBtnText, { color: colors.secondary }]}>
+                إعادة شرح التطبيق
+              </Text>
+              <Feather name="help-circle" size={15} color={colors.secondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
                 styles.dangerBtn,
-                {
-                  backgroundColor: colors.danger + "18",
-                  borderColor: colors.danger + "44",
-                },
+                { backgroundColor: colors.danger + "18", borderColor: colors.danger + "44" },
               ]}
               onPress={handleReset}
             >
@@ -312,14 +359,10 @@ export default function SettingsScreen() {
             <Text style={[styles.aboutTitle, { color: colors.foreground }]}>
               عقلية مالية
             </Text>
-            <Text
-              style={[styles.aboutSub, { color: colors.mutedForeground }]}
-            >
-              تحكم بأموالك بذكاء
+            <Text style={[styles.aboutSub, { color: colors.mutedForeground }]}>
+              تحكّم بأموالك بذكاء وثقة
             </Text>
-            <Text
-              style={[styles.aboutVersion, { color: colors.mutedForeground }]}
-            >
+            <Text style={[styles.aboutVersion, { color: colors.mutedForeground }]}>
               الإصدار 1.0.0
             </Text>
           </GlassCard>
@@ -341,16 +384,12 @@ export default function SettingsScreen() {
               { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
-            <View
-              style={[styles.pickerHandle, { backgroundColor: colors.border }]}
-            />
+            <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
             <View style={styles.pickerHeader}>
               <TouchableOpacity onPress={() => setShowCurrencyPicker(false)}>
                 <Feather name="x" size={22} color={colors.mutedForeground} />
               </TouchableOpacity>
-              <Text
-                style={[styles.pickerTitle, { color: colors.foreground }]}
-              >
+              <Text style={[styles.pickerTitle, { color: colors.foreground }]}>
                 اختر العملة
               </Text>
             </View>
@@ -362,9 +401,7 @@ export default function SettingsScreen() {
                     styles.currencyItem,
                     {
                       backgroundColor:
-                        settings.currency === c.code
-                          ? colors.primary + "18"
-                          : "transparent",
+                        settings.currency === c.code ? colors.primary + "18" : "transparent",
                       borderBottomColor: colors.border,
                     },
                   ]}
@@ -375,32 +412,21 @@ export default function SettingsScreen() {
                 >
                   <View style={styles.currencyItemRight}>
                     {settings.currency === c.code && (
-                      <Feather
-                        name="check"
-                        size={16}
-                        color={colors.primary}
-                      />
+                      <Feather name="check" size={16} color={colors.primary} />
                     )}
                     <Text
                       style={[
                         styles.currencyItemName,
                         {
                           color:
-                            settings.currency === c.code
-                              ? colors.primary
-                              : colors.foreground,
+                            settings.currency === c.code ? colors.primary : colors.foreground,
                         },
                       ]}
                     >
                       {c.name}
                     </Text>
                   </View>
-                  <Text
-                    style={[
-                      styles.currencyItemSymbol,
-                      { color: colors.mutedForeground },
-                    ]}
-                  >
+                  <Text style={[styles.currencyItemSymbol, { color: colors.mutedForeground }]}>
                     {c.symbol}
                   </Text>
                 </TouchableOpacity>
@@ -432,16 +458,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   statsCard: { marginBottom: 16 },
-  statsRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-  },
+  statsRow: { flexDirection: "row-reverse", alignItems: "center" },
   statItem: { flex: 1, alignItems: "center" },
-  statNum: {
-    fontSize: 20,
-    fontWeight: "800",
-    fontFamily: "Inter_700Bold",
-  },
+  statNum: { fontSize: 20, fontWeight: "800", fontFamily: "Inter_700Bold" },
   statLbl: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
@@ -479,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  settingText: { alignItems: "flex-end" },
+  settingText: { alignItems: "flex-end", flex: 1 },
   settingTitle: {
     fontSize: 14,
     fontWeight: "600",
@@ -501,17 +520,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  currencyBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-  },
-  autoTag: {
+  currencyBtnText: { fontSize: 13, fontWeight: "700", fontFamily: "Inter_700Bold" },
+  themeSelector: { flexDirection: "row-reverse", gap: 6 },
+  themeBtn: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 7,
     borderRadius: 10,
+    borderWidth: 1,
+    minWidth: 52,
   },
-  autoTagText: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  themeBtnText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  actionBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  actionBtnText: { fontSize: 14, fontWeight: "600", fontFamily: "Inter_600SemiBold" },
   dangerBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
@@ -520,13 +553,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
-    marginTop: 4,
+    marginTop: 10,
   },
-  dangerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    fontFamily: "Inter_700Bold",
-  },
+  dangerBtnText: { fontSize: 14, fontWeight: "700", fontFamily: "Inter_700Bold" },
   aboutCard: { marginBottom: 16, alignItems: "center" },
   aboutTitle: {
     fontSize: 20,
@@ -596,8 +625,5 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     textAlign: "right",
   },
-  currencyItemSymbol: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
+  currencyItemSymbol: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });

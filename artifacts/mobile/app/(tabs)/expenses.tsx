@@ -9,7 +9,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -22,8 +21,6 @@ type FilterType = "all" | "normal" | "medium" | "high" | "paid";
 
 export default function ExpensesScreen() {
   const colors = useColors();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
   const { expenses, totalSpent, income, settings } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -51,13 +48,13 @@ export default function ExpensesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
+        barStyle={colors.isDark ? "light-content" : "dark-content"}
         backgroundColor="transparent"
         translucent
       />
       <LinearGradient
         colors={
-          isDark
+          colors.isDark
             ? ["#070D1B", "#0A1628", "#070D1B"]
             : ["#EEF2FF", "#E0E8FF", "#EEF2FF"]
         }

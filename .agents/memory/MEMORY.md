@@ -1,0 +1,3 @@
+- [ThemeContext pattern](theme-context.md) — theme is managed via ThemeContext (not system-only); useColors reads from it, not useColorScheme directly.
+- [AI insight projection fix](ai-insight-fix.md) — daily rate must use only this-month expenses and require ≥5 days before projecting.
+- [ScoreRing semantics](score-ring.md) — ring shows spentPercent (0–100%) with inverted colors: green<50%, yellow 50–75%, orange 75–90%, red≥90%.

@@ -5,27 +5,27 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-na
 import { useColors } from "@/hooks/useColors";
 
 interface ScoreRingProps {
-  score: number;
+  spentPercent: number;
   size?: number;
 }
 
-function getScoreColor(score: number) {
-  if (score >= 80) return "#00E676";
-  if (score >= 60) return "#FFB700";
-  if (score >= 40) return "#FF9800";
+function getSpendColor(pct: number) {
+  if (pct < 50) return "#00E676";
+  if (pct < 75) return "#FFB700";
+  if (pct < 90) return "#FF9800";
   return "#FF4B4B";
 }
 
-function getScoreLabel(score: number) {
-  if (score >= 80) return "ممتاز";
-  if (score >= 60) return "جيد";
-  if (score >= 40) return "متوسط";
-  return "ضعيف";
+function getSpendLabel(pct: number) {
+  if (pct < 50) return "ممتاز";
+  if (pct < 75) return "جيد";
+  if (pct < 90) return "تنبّه";
+  return "خطر";
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-export function ScoreRing({ score, size = 110 }: ScoreRingProps) {
+export function ScoreRing({ spentPercent, size = 110 }: ScoreRingProps) {
   const colors = useColors();
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
@@ -36,27 +36,28 @@ export function ScoreRing({ score, size = 110 }: ScoreRingProps) {
 
   useEffect(() => {
     Animated.timing(animValue, {
-      toValue: score,
-      duration: 1500,
+      toValue: Math.min(spentPercent, 100),
+      duration: 1200,
       useNativeDriver: false,
     }).start();
-  }, [score]);
+  }, [spentPercent]);
 
   const strokeDashoffset = animValue.interpolate({
     inputRange: [0, 100],
     outputRange: [circumference, 0],
   });
 
-  const scoreColor = getScoreColor(score);
-  const label = getScoreLabel(score);
+  const ringColor = getSpendColor(spentPercent);
+  const label = getSpendLabel(spentPercent);
+  const pctDisplay = Math.round(spentPercent);
 
   return (
     <View style={{ alignItems: "center", justifyContent: "center" }}>
       <Svg width={size} height={size}>
         <Defs>
-          <SvgGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={scoreColor} stopOpacity="1" />
-            <Stop offset="100%" stopColor={colors.primary} stopOpacity="1" />
+          <SvgGradient id="spendGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor={ringColor} stopOpacity="1" />
+            <Stop offset="100%" stopColor={ringColor} stopOpacity="0.6" />
           </SvgGradient>
         </Defs>
         <Circle
@@ -71,7 +72,7 @@ export function ScoreRing({ score, size = 110 }: ScoreRingProps) {
           cx={center}
           cy={center}
           r={radius}
-          stroke="url(#scoreGrad)"
+          stroke="url(#spendGrad)"
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"
@@ -81,27 +82,22 @@ export function ScoreRing({ score, size = 110 }: ScoreRingProps) {
           origin={`${center}, ${center}`}
         />
       </Svg>
-      <View
-        style={{
-          position: "absolute",
-          alignItems: "center",
-        }}
-      >
+      <View style={{ position: "absolute", alignItems: "center" }}>
         <Text
           style={{
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: "800",
-            color: scoreColor,
+            color: ringColor,
             fontFamily: "Inter_700Bold",
           }}
         >
-          {score}
+          {pctDisplay}٪
         </Text>
         <Text
           style={{
             fontSize: 10,
-            color: colors.mutedForeground,
-            fontFamily: "Inter_400Regular",
+            color: ringColor,
+            fontFamily: "Inter_600SemiBold",
             textAlign: "center",
           }}
         >

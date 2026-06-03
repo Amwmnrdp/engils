@@ -15,22 +15,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider } from "@/context/AppContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 
-// ─── RTL: only call forceRTL when the current direction is NOT already RTL.
-// Calling forceRTL(true) when isRTL is already true is a no-op, but calling
-// it when isRTL is false triggers a bundle reload on Android standalone APKs.
-// Without this guard the app reloads once per fresh install, and the race with
-// SplashScreen.preventAutoHideAsync() leaves the splash stuck forever.
 if (!I18nManager.isRTL) {
   I18nManager.allowRTL(true);
   I18nManager.forceRTL(true);
-  // The OS will restart the JS bundle once after this. That restart is normal;
-  // on the second boot isRTL will already be true so this branch is skipped.
 }
 
-// Prevent the splash from auto-hiding. We call it here so it is registered
-// as early as possible (before any async work). Errors are swallowed so a
-// failure here does not block the app.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
@@ -43,9 +34,6 @@ function AppStack() {
   );
 }
 
-// Resolves the KeyboardProvider safely. If the native module is missing or
-// throws for any reason we fall back to a plain GestureHandlerRootView so the
-// rest of the app still renders.
 function AppShell() {
   if (Platform.OS === "web") {
     return (
@@ -56,7 +44,6 @@ function AppShell() {
   }
 
   try {
-    // Lazy require keeps the module off the critical startup path.
     const { KeyboardProvider } =
       require("react-native-keyboard-controller") as typeof import("react-native-keyboard-controller");
     return (
@@ -104,12 +91,8 @@ export default function RootLayout() {
       return;
     }
 
-    // Hard timeout: if fonts never resolve (e.g. assets missing in APK) we
-    // still show the app after 3 s rather than leaving the user on the splash.
     const timer = setTimeout(() => {
-      if (__DEV__) {
-        console.warn("[Layout] Font loading timed out — using system fonts");
-      }
+      if (__DEV__) console.warn("[Layout] Font loading timed out — using system fonts");
       finish();
     }, 3000);
 
@@ -119,21 +102,21 @@ export default function RootLayout() {
     };
   }, [fontsLoaded, fontError]);
 
-  // While waiting: render a solid-colour view (never null) so there is no
-  // white flash. The splash screen sits on top until hideAsync() is called.
   if (!appReady) {
     return <View style={{ flex: 1, backgroundColor: "#EEF2FF" }} />;
   }
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AppProvider>
-            <AppShell />
-          </AppProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <AppProvider>
+              <AppShell />
+            </AppProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
