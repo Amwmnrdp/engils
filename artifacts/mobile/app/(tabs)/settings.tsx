@@ -1,10 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Notifications from "expo-notifications";
 import React, { useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -97,13 +99,37 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleTestNotification = () => {
+  const handleTestNotification = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      "✅ الإشعارات تعمل",
-      "تم استلام الإشعار بنجاح! الإشعارات مفعّلة على جهازك.",
-      [{ text: "حسناً" }]
-    );
+
+    try {
+      const perm = await Notifications.getPermissionsAsync() as any;
+      if (!perm.granted && perm.status !== "granted") {
+        const newPerm = await Notifications.requestPermissionsAsync() as any;
+        if (!newPerm.granted && newPerm.status !== "granted") {
+          Alert.alert(
+            "إشعارات محظورة",
+            "يرجى السماح بالإشعارات من إعدادات الهاتف حتى تصلك التنبيهات.",
+            [{ text: "حسناً" }]
+          );
+          return;
+        }
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "عقلية مالية 💰",
+          body: "الإشعارات تعمل بشكل صحيح! ستصلك تنبيهات مصاريفك في الوقت المناسب.",
+          sound: true,
+        },
+        trigger: Platform.OS === "android"
+          ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1 }
+          : { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1 },
+      });
+    } catch (e) {
+      if (__DEV__) console.warn("[Notification test] error:", e);
+      Alert.alert("خطأ", "تعذّر إرسال الإشعار. تحقق من صلاحيات الإشعارات.");
+    }
   };
 
   const handleReplayOnboarding = () => {

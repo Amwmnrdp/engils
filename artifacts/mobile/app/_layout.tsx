@@ -6,6 +6,8 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as NavigationBar from "expo-navigation-bar";
+import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
@@ -24,7 +26,34 @@ if (!I18nManager.isRTL) {
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowAlert: true,
+  }),
+});
+
 const queryClient = new QueryClient();
+
+async function setupApp() {
+  if (Platform.OS === "android") {
+    try {
+      await NavigationBar.setVisibilityAsync("hidden");
+    } catch (e) {
+      if (__DEV__) console.warn("[Layout] NavigationBar setup failed:", e);
+    }
+  }
+
+  try {
+    const result = await Notifications.requestPermissionsAsync() as any;
+    if (__DEV__) console.log("[Notifications] Permission:", result.granted ?? result.status);
+  } catch (e) {
+    if (__DEV__) console.warn("[Notifications] Permission request failed:", e);
+  }
+}
 
 function AppStack() {
   return (
@@ -78,6 +107,7 @@ export default function RootLayout() {
 
     async function finish() {
       if (cancelled) return;
+      await setupApp();
       setAppReady(true);
       try {
         await SplashScreen.hideAsync();
