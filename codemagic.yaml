@@ -51,20 +51,35 @@ workflows:
             echo "ABI split block already present — skipping."
           fi
 
+      - name: Test Metro bundle (catch Babel errors early)
+        script: |
+          set -euo pipefail
+          cd artifacts/mobile
+          # Bundle JS independently so any Babel/Metro error is fully visible
+          # in THIS step's log — not buried in Gradle's last-50-lines.
+          pnpm exec react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file node_modules/expo/AppEntry.js \
+            --bundle-output /tmp/index.android.bundle \
+            --assets-dest /tmp/android-assets \
+            --reset-cache
+
       - name: Build release APK
         script: |
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          # Save full log so we can grep the real error at the bottom on failure.
-          # pipefail + tee preserves the Gradle exit code.
-          set -o pipefail
-          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
+          # BUNDLE_SKIP_METRO: reuse the pre-built bundle from the step above
+          # so Gradle doesn't re-run Metro (avoids the buried-error problem).
+          ./gradlew assembleRelease --no-daemon \
+            -PbundleAssetName=index.android.bundle \
+            -PextraPackagerArgs="" 2>&1 | tee /tmp/gradle.log
           EXIT=$?
           if [ $EXIT -ne 0 ]; then
             echo ""
             echo "====== GRADLE ERROR SUMMARY ======"
-            grep -E "^(FAILURE|> |Caused by|error:|Could not)" /tmp/gradle.log | tail -40
+            grep -vE "^\s+at (org\.gradle|java\.|sun\.|com\.google)" /tmp/gradle.log | tail -60
             echo "=================================="
             exit $EXIT
           fi
