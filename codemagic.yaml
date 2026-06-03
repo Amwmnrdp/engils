@@ -80,10 +80,10 @@ workflows:
           cd artifacts/mobile/android
           chmod +x gradlew
 
-          # SKIP_BUNDLING=true — tells the React Native Gradle Plugin to skip
-          # the createBundleReleaseJsAndAssets task and use the pre-built bundle
-          # we placed in android/app/src/main/assets/ above.
-          SKIP_BUNDLING=true ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
+          # -x createBundleReleaseJsAndAssets — explicitly excludes the Metro
+          # bundling task since we already built the bundle in the previous step
+          # and placed it in android/app/src/main/assets/.
+          ./gradlew assembleRelease -x createBundleReleaseJsAndAssets --no-daemon 2>&1 | tee /tmp/gradle.log
           EXIT=$?
           if [ $EXIT -ne 0 ]; then
             echo ""
