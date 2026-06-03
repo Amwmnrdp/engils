@@ -8,6 +8,11 @@ import React, {
 } from "react";
 
 import { CATEGORY_NAMES } from "@/constants/quotes";
+import {
+  cancelExpenseNotifications,
+  rescheduleAllExpenses,
+  scheduleExpenseNotifications,
+} from "@/utils/notifications";
 
 export type ImportanceLevel = "normal" | "medium" | "high";
 export type ExpenseCategory =
@@ -18,6 +23,12 @@ export type ExpenseCategory =
   | "travel"
   | "education"
   | "health"
+  | "rent"
+  | "installment"
+  | "subscription"
+  | "car"
+  | "utilities"
+  | "gym"
   | "other";
 
 export interface Expense {
@@ -78,6 +89,8 @@ interface AppContextType {
   totalSpent: number;
   remainingBalance: number;
   spentPercent: number;
+  nextMonthTotal: number;
+  nextMonthBalance: number;
   isLoaded: boolean;
 }
 
@@ -90,6 +103,11 @@ const defaultSettings: AppSettings = {
 };
 
 const AppContext = createContext<AppContextType | null>(null);
+
+function getMonthGroup(deadline: string) {
+  const d = new Date(deadline);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [income, setIncomeState] = useState(0);
@@ -108,9 +126,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem("settings"),
         ]);
         if (inc) setIncomeState(parseFloat(inc) || 0);
-        if (exp) setExpenses(JSON.parse(exp));
         if (gls) setGoals(JSON.parse(gls));
         if (set) setSettings({ ...defaultSettings, ...JSON.parse(set) });
+        if (exp) {
+          const parsed: Expense[] = JSON.parse(exp);
+          setExpenses(parsed);
+          rescheduleAllExpenses(parsed).catch(() => {});
+        }
       } catch (_) {
       } finally {
         setIsLoaded(true);
@@ -136,11 +158,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem("expenses", JSON.stringify(updated)).catch(() => {});
         return updated;
       });
+      scheduleExpenseNotifications(newExpense).catch(() => {});
     },
     []
   );
 
   const deleteExpense = useCallback(async (id: string) => {
+    cancelExpenseNotifications(id).catch(() => {});
     setExpenses((prev) => {
       const updated = prev.filter((e) => e.id !== id);
       AsyncStorage.setItem("expenses", JSON.stringify(updated)).catch(() => {});
@@ -149,6 +173,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const markExpensePaid = useCallback(async (id: string) => {
+    cancelExpenseNotifications(id).catch(() => {});
     setExpenses((prev) => {
       const updated = prev.map((e) =>
         e.id === id ? { ...e, paid: true } : e
@@ -224,9 +249,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await updateSettings({ onboardingCompleted: false });
   }, [updateSettings]);
 
+  // ── Month-smart calculations ──────────────────────────────────────
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const curMonth = today.getMonth();
+  const curYear = today.getFullYear();
+  const nxtMonth = curMonth === 11 ? 0 : curMonth + 1;
+  const nxtMonthYear = curMonth === 11 ? curYear + 1 : curYear;
+
   const unpaidExpenses = expenses.filter((e) => !e.paid);
-  const totalSpent = unpaidExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  // This month = unpaid expenses due this month OR overdue (still unpaid from past months)
+  const thisMonthUnpaid = unpaidExpenses.filter((e) => {
+    const { year, month } = getMonthGroup(e.deadline);
+    return year < curYear || (year === curYear && month <= curMonth);
+  });
+
+  // Next month = unpaid expenses due specifically next month
+  const nextMonthUnpaid = unpaidExpenses.filter((e) => {
+    const { year, month } = getMonthGroup(e.deadline);
+    return year === nxtMonthYear && month === nxtMonth;
+  });
+
+  const paidExpenses = expenses.filter((e) => e.paid);
+  const totalSpent = thisMonthUnpaid.reduce((s, e) => s + e.amount, 0);
+  const nextMonthTotal = nextMonthUnpaid.reduce((s, e) => s + e.amount, 0);
   const remainingBalance = income - totalSpent;
+  const nextMonthBalance = income - nextMonthTotal;
   const spentPercent = income > 0 ? Math.min((totalSpent / income) * 100, 100) : 0;
 
   const financialScore = (() => {
@@ -236,7 +285,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (ratio > 0.9) score -= 40;
     else if (ratio > 0.7) score -= 25;
     else if (ratio > 0.5) score -= 10;
-    const highCount = unpaidExpenses.filter((e) => e.importance === "high").length;
+    const highCount = thisMonthUnpaid.filter((e) => e.importance === "high").length;
     score -= highCount * 5;
     if (settings.emergencyMode) score -= 5;
     return Math.max(0, Math.min(100, Math.round(score)));
@@ -245,30 +294,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const aiInsights: AIInsight[] = (() => {
     if (income <= 0) return [];
     const insights: AIInsight[] = [];
-    const today = new Date();
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
     const daysPassed = today.getDate();
 
-    // Only project if we have enough days of data (≥5 days)
-    // and use only THIS month's expenses to avoid skewed daily rates
-    const thisMonthExpenses = unpaidExpenses.filter((e) => {
-      const created = new Date(e.createdAt);
-      return (
-        created.getMonth() === today.getMonth() &&
-        created.getFullYear() === today.getFullYear()
-      );
-    });
-
-    const spentThisMonth = thisMonthExpenses.reduce((s, e) => s + e.amount, 0);
-
-    if (spentThisMonth > income) {
+    // Month budget status
+    if (totalSpent > income) {
       insights.push({
         id: "over",
         type: "warning",
-        message: `تجاوزت ميزانيتك! صرفت ${spentThisMonth.toLocaleString("ar-SA")} ${settings.currency} من أصل ${income.toLocaleString("ar-SA")} ${settings.currency}.`,
+        message: `تجاوزت ميزانية هذا الشهر! المصاريف ${totalSpent.toLocaleString("ar-SA")} ${settings.currency} من أصل ${income.toLocaleString("ar-SA")} ${settings.currency}.`,
         icon: "alert-triangle",
       });
     } else if (daysPassed >= 5) {
+      const thisMonthCreated = thisMonthUnpaid.filter((e) => {
+        const created = new Date(e.createdAt);
+        return (
+          created.getMonth() === curMonth &&
+          created.getFullYear() === curYear
+        );
+      });
+      const spentThisMonth = thisMonthCreated.reduce((s, e) => s + e.amount, 0);
       const dailyRate = spentThisMonth / daysPassed;
       const projectedSpend = dailyRate * daysInMonth;
       const projectedRemaining = income - projectedSpend;
@@ -279,7 +324,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           message: `بمعدل إنفاقك الحالي قد تتجاوز ميزانيتك بـ ${Math.abs(Math.round(projectedRemaining)).toLocaleString("ar-SA")} ${settings.currency} نهاية الشهر.`,
           icon: "alert-triangle",
         });
-      } else {
+      } else if (spentThisMonth > 0) {
         insights.push({
           id: "proj",
           type: "info",
@@ -296,8 +341,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
+    // Next month alert
+    if (nextMonthTotal > 0) {
+      const nxtPct = income > 0 ? Math.round((nextMonthTotal / income) * 100) : 0;
+      insights.push({
+        id: "next",
+        type: nextMonthBalance < 0 ? "warning" : "tip",
+        message:
+          nextMonthBalance < 0
+            ? `مصاريف الشهر القادم ${nextMonthTotal.toLocaleString("ar-SA")} ${settings.currency} تتجاوز دخلك — خطط مبكراً!`
+            : `مصاريف الشهر القادم ${nxtPct}٪ من دخلك، سيتبقى ${nextMonthBalance.toLocaleString("ar-SA")} ${settings.currency}.`,
+        icon: "calendar",
+      });
+    }
+
+    // Top category
     const categoryTotals: Record<string, number> = {};
-    unpaidExpenses.forEach((e) => {
+    thisMonthUnpaid.forEach((e) => {
       categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
     });
     const sorted = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a);
@@ -312,17 +372,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    const urgentCount = unpaidExpenses.filter((e) => {
+    // Urgent (within 5 days)
+    const urgentCount = thisMonthUnpaid.filter((e) => {
       const dl = new Date(e.deadline);
-      const daysLeft = Math.ceil((dl.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      return daysLeft >= 0 && daysLeft <= 3;
+      const daysLeft = Math.ceil((dl.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return daysLeft >= 0 && daysLeft <= 5;
     }).length;
 
     if (urgentCount > 0) {
       insights.push({
         id: "urgent",
         type: "warning",
-        message: `لديك ${urgentCount} مصروف يستحق خلال 3 أيام — لا تنسَ السداد!`,
+        message: `لديك ${urgentCount} مصروف يستحق خلال 5 أيام — لا تنسَ السداد!`,
         icon: "clock",
       });
     }
@@ -362,6 +423,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         totalSpent,
         remainingBalance,
         spentPercent,
+        nextMonthTotal,
+        nextMonthBalance,
         isLoaded,
       }}
     >

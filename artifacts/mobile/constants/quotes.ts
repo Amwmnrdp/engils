@@ -32,6 +32,12 @@ export const CATEGORY_NAMES: Record<string, string> = {
   travel: "سفر",
   education: "تعليم",
   health: "صحة",
+  rent: "إيجار",
+  installment: "قسط",
+  subscription: "اشتراك",
+  car: "مواصلات",
+  utilities: "مرافق",
+  gym: "رياضة",
   other: "أخرى",
 };
 
@@ -43,6 +49,12 @@ export const CATEGORY_ICONS: Record<string, string> = {
   travel: "map-pin",
   education: "book",
   health: "heart",
+  rent: "home",
+  installment: "credit-card",
+  subscription: "repeat",
+  car: "navigation",
+  utilities: "zap",
+  gym: "activity",
   other: "more-horizontal",
 };
 
@@ -54,6 +66,12 @@ export const CATEGORY_COLORS: Record<string, string> = {
   travel: "#3498DB",
   education: "#2ECC71",
   health: "#E91E63",
+  rent: "#E74C3C",
+  installment: "#8E44AD",
+  subscription: "#1ABC9C",
+  car: "#2980B9",
+  utilities: "#F1C40F",
+  gym: "#27AE60",
   other: "#95A5A6",
 };
 

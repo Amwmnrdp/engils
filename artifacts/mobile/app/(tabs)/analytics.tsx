@@ -135,18 +135,42 @@ export default function AnalyticsScreen() {
   const colors = useColors();
   const { expenses, income, totalSpent, remainingBalance, settings } = useApp();
 
+  const today = new Date();
+  const curMonth = today.getMonth();
+  const curYear = today.getFullYear();
+  const nxtMonth = curMonth === 11 ? 0 : curMonth + 1;
+  const nxtMonthYear = curMonth === 11 ? curYear + 1 : curYear;
+
   const unpaidExpenses = expenses.filter((e) => !e.paid);
   const paidExpenses = expenses.filter((e) => e.paid);
 
+  // This month: due this month or overdue (still unpaid)
+  const thisMonthUnpaid = unpaidExpenses.filter((e) => {
+    const dl = new Date(e.deadline);
+    return (
+      dl.getFullYear() < curYear ||
+      (dl.getFullYear() === curYear && dl.getMonth() <= curMonth)
+    );
+  });
+
+  // Next month upcoming
+  const nextMonthUnpaid = unpaidExpenses.filter((e) => {
+    const dl = new Date(e.deadline);
+    return dl.getFullYear() === nxtMonthYear && dl.getMonth() === nxtMonth;
+  });
+
+  const nextMonthTotal = nextMonthUnpaid.reduce((s, e) => s + e.amount, 0);
+  const nextMonthBalance = income - nextMonthTotal;
+
   const categoryTotals: Record<string, number> = {};
-  unpaidExpenses.forEach((e) => {
+  thisMonthUnpaid.forEach((e) => {
     categoryTotals[e.category] =
       (categoryTotals[e.category] || 0) + e.amount;
   });
 
   const chartData = Object.entries(categoryTotals)
     .sort(([, a], [, b]) => b - a)
-    .slice(0, 6)
+    .slice(0, 8)
     .map(([cat, val]) => ({
       label: CATEGORY_NAMES[cat] || cat,
       value: val,
@@ -158,11 +182,11 @@ export default function AnalyticsScreen() {
       ? Math.max(0, Math.round(((income - totalSpent) / income) * 100))
       : 0;
 
-  const urgentCount = unpaidExpenses.filter((e) => {
+  const urgentCount = thisMonthUnpaid.filter((e) => {
     const daysLeft = Math.ceil(
       (new Date(e.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
-    return daysLeft >= 0 && daysLeft <= 7;
+    return daysLeft >= 0 && daysLeft <= 5;
   }).length;
 
   return (
@@ -201,13 +225,13 @@ export default function AnalyticsScreen() {
               color={colors.success}
             />
             <StatCard
-              label="إجمالي المصاريف"
+              label="مصاريف هذا الشهر"
               value={`${totalSpent.toLocaleString("ar-SA")} ${settings.currency}`}
               icon="trending-down"
               color={colors.danger}
             />
             <StatCard
-              label="الرصيد المتبقي"
+              label="رصيد هذا الشهر"
               value={`${remainingBalance.toLocaleString("ar-SA")} ${settings.currency}`}
               icon="dollar-sign"
               color={remainingBalance >= 0 ? colors.primary : colors.danger}
@@ -231,6 +255,44 @@ export default function AnalyticsScreen() {
               color={colors.success}
             />
           </View>
+
+          {nextMonthTotal > 0 && income > 0 && (
+            <GlassCard style={styles.chartCard}>
+              <Text style={[styles.chartTitle, { color: colors.foreground }]}>
+                توقعات الشهر القادم
+              </Text>
+              <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", marginBottom: 12 }}>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular" }, { color: colors.mutedForeground }]}>مصاريف مجدولة</Text>
+                  <Text style={[{ fontSize: 18, fontFamily: "Inter_700Bold", fontWeight: "700" }, { color: colors.danger }]}>
+                    {nextMonthTotal.toLocaleString("ar-SA")} {settings.currency}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-start" }}>
+                  <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular" }, { color: colors.mutedForeground }]}>الرصيد المتوقع</Text>
+                  <Text style={[{ fontSize: 18, fontFamily: "Inter_700Bold", fontWeight: "700" }, { color: nextMonthBalance >= 0 ? colors.success : colors.danger }]}>
+                    {nextMonthBalance >= 0 ? "+" : ""}{nextMonthBalance.toLocaleString("ar-SA")} {settings.currency}
+                  </Text>
+                </View>
+              </View>
+              {nextMonthUnpaid.map((e) => {
+                const catColor = CATEGORY_COLORS[e.category] || "#95A5A6";
+                return (
+                  <View key={e.id} style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                    <Text style={[styles.breakdownPct, { color: catColor }]}>
+                      {e.amount.toLocaleString("ar-SA")}
+                    </Text>
+                    <Text style={[styles.breakdownLabel, { color: colors.foreground, flex: 1 }]} numberOfLines={1}>
+                      {e.name}
+                    </Text>
+                    <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular" }, { color: colors.mutedForeground }]}>
+                      {CATEGORY_NAMES[e.category] || e.category}
+                    </Text>
+                  </View>
+                );
+              })}
+            </GlassCard>
+          )}
 
           {chartData.length > 0 ? (
             <GlassCard style={styles.chartCard}>
@@ -289,12 +351,12 @@ export default function AnalyticsScreen() {
             </GlassCard>
           )}
 
-          {unpaidExpenses.length > 0 && income > 0 && (
+          {thisMonthUnpaid.length > 0 && income > 0 && (
             <GlassCard style={styles.breakdownCard}>
               <Text
                 style={[styles.chartTitle, { color: colors.foreground }]}
               >
-                تفصيل الفئات
+                تفصيل فئات هذا الشهر
               </Text>
               {Object.entries(categoryTotals)
                 .sort(([, a], [, b]) => b - a)

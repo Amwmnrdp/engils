@@ -36,6 +36,8 @@ export default function HomeScreen() {
     aiInsights,
     expenses,
     settings,
+    nextMonthTotal,
+    nextMonthBalance,
   } = useApp();
 
   const [incomeInput, setIncomeInput] = useState("");
@@ -276,6 +278,35 @@ export default function HomeScreen() {
               </GlassCard>
             )}
 
+            {income > 0 && nextMonthTotal > 0 && (
+              <GlassCard style={styles.nextMonthCard} padding={14}>
+                <View style={styles.nextMonthHeader}>
+                  <Feather name="calendar" size={14} color={colors.primary} />
+                  <Text style={[styles.nextMonthTitle, { color: colors.mutedForeground }]}>
+                    توقعات الشهر القادم
+                  </Text>
+                </View>
+                <View style={styles.nextMonthRow}>
+                  <Text style={[styles.nextMonthSub, { color: colors.mutedForeground }]}>
+                    مصاريف مجدولة: {nextMonthTotal.toLocaleString("ar-SA")} {settings.currency}
+                  </Text>
+                  <View style={styles.nextMonthBadge}>
+                    <Feather
+                      name={nextMonthBalance >= 0 ? "check-circle" : "alert-circle"}
+                      size={13}
+                      color={nextMonthBalance >= 0 ? colors.success : colors.danger}
+                    />
+                    <Text style={[
+                      styles.nextMonthBalance,
+                      { color: nextMonthBalance >= 0 ? colors.success : colors.danger },
+                    ]}>
+                      {nextMonthBalance >= 0 ? "+" : ""}{nextMonthBalance.toLocaleString("ar-SA")} {settings.currency}
+                    </Text>
+                  </View>
+                </View>
+              </GlassCard>
+            )}
+
             <GlassCard style={styles.quoteCard} padding={14}>
               <View style={styles.quoteRow}>
                 <Text style={[styles.quoteText, { color: colors.foreground }]}>
@@ -502,6 +533,39 @@ const styles = StyleSheet.create({
   },
   startBtnText: {
     fontSize: 17,
+    fontWeight: "700",
+    fontFamily: "Inter_700Bold",
+  },
+  nextMonthCard: { marginBottom: 14 },
+  nextMonthHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  nextMonthTitle: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    textAlign: "right",
+  },
+  nextMonthRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  nextMonthSub: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "right",
+    flex: 1,
+  },
+  nextMonthBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 4,
+  },
+  nextMonthBalance: {
+    fontSize: 14,
     fontWeight: "700",
     fontFamily: "Inter_700Bold",
   },

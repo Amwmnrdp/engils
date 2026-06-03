@@ -28,13 +28,19 @@ interface AddExpenseModalProps {
 }
 
 const CATEGORIES: ExpenseCategory[] = [
+  "rent",
+  "installment",
+  "bills",
+  "utilities",
   "food",
   "shopping",
-  "gaming",
-  "bills",
-  "travel",
-  "education",
+  "car",
+  "subscription",
   "health",
+  "education",
+  "travel",
+  "gaming",
+  "gym",
   "other",
 ];
 
