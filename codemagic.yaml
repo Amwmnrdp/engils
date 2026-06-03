@@ -60,14 +60,7 @@ workflows:
           #    multiple react{} blocks so this safely overrides without touching
           #    the expo-generated block.
           if ! grep -q "entryFile" "$GRADLE"; then
-            cat >> "$GRADLE" << 'GROOVY'
-
-// Monorepo/expo-router: use the correct entry file for the RN bundler.
-// Without this, the Gradle plugin defaults to "index.js" which is absent.
-react {
-    entryFile = file("../../node_modules/expo-router/entry.js")
-}
-GROOVY
+            printf '\n// expo-router entry fix: RN plugin defaults to index.js which is absent.\nreact {\n    entryFile = file("../../node_modules/expo-router/entry.js")\n}\n' >> "$GRADLE"
             echo "entryFile patch applied."
           else
             echo "entryFile already present — skipping."
