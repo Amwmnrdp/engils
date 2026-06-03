@@ -109,17 +109,13 @@ workflows:
 
           if [ $EXIT -ne 0 ]; then
             echo ""
-            echo "====== BUNDLE TASK OUTPUT (Metro/node error) ======"
-            # Extract everything the bundleRelease task printed to stdout/stderr.
-            # With --info Gradle prefixes subprocess output with the task name;
-            # without it, the subprocess writes directly to the log stream.
-            awk '
-              /> Task :app:createBundleRelease/ { p=1 }
-              p { print }
-              /^> Task :/ && !/createBundleRelease/ { p=0 }
-            ' /tmp/gradle.log | head -120
-            echo "====== LAST 30 LINES ======"
-            tail -30 /tmp/gradle.log
+            echo "====== ACTUAL ERROR (lines before first stack frame) ======"
+            # The real error message appears just before the first "at " stack
+            # frame line. -B5 captures 5 lines before each stack frame hit.
+            grep -m 1 -B 8 "at loadPrivatePartialConfig\|at loadFullConfig\|at Object\.transform\|SyntaxError\|Cannot find module\|Module not found" \
+              /tmp/gradle.log | grep -v "^--$" | head -20
+            echo "====== LAST 20 LINES ======"
+            tail -20 /tmp/gradle.log
             echo "==================================================="
             exit $EXIT
           fi
