@@ -54,16 +54,15 @@ workflows:
             echo "ABI split block already present — skipping."
           fi
 
-          # 2. entryFile — RN Gradle plugin defaults to index.js which does not
-          #    exist in this project (entry is expo-router/entry via package.json
-          #    "main" field). We append a second react{} block; Groovy DSL merges
-          #    multiple react{} blocks so this safely overrides without touching
-          #    the expo-generated block.
+          # 2. entryFile + metro config — RN plugin defaults to index.js (absent)
+          #    and does NOT pass --config to Metro, so Metro may not find our
+          #    custom metro.config.js (which sets up the pnpm/monorepo resolver).
+          #    Appending a second react{} block is valid; Groovy DSL merges them.
           if ! grep -q "entryFile" "$GRADLE"; then
-            printf '\n// expo-router entry fix: RN plugin defaults to index.js which is absent.\nreact {\n    entryFile = file("../../node_modules/expo-router/entry.js")\n}\n' >> "$GRADLE"
-            echo "entryFile patch applied."
+            printf '\n// Monorepo fixes applied by Codemagic patch step\nreact {\n    entryFile = file("../../node_modules/expo-router/entry.js")\n    extraPackagerArgs = ["--config", file("../../metro.config.js").absolutePath]\n}\n' >> "$GRADLE"
+            echo "entryFile + metro config patch applied."
           else
-            echo "entryFile already present — skipping."
+            echo "entryFile already present — skipping patch."
           fi
 
           # 3. NODE_BINARY — Gradle spawns node in a subprocess with a stripped
