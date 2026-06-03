@@ -24,56 +24,77 @@ workflows:
     scripts:
       - name: Install dependencies
         script: |
+          set -euo pipefail
           corepack enable
           pnpm --version
           pnpm install --no-frozen-lockfile --ignore-scripts
 
       - name: Expo prebuild
         script: |
+          set -euo pipefail
           cd artifacts/mobile
           pnpm exec expo prebuild --platform android --clean --no-install
 
       - name: Sync lockfile after prebuild
         script: |
+          set -euo pipefail
           pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Patch build.gradle — arm64 only, release optimisation
+      - name: Patch build.gradle — arm64 ABI split
         script: |
-          # Append ABI split config so the release APK targets arm64-v8a only.
-          # This alone cuts the APK from ~200 MB (all ABIs, debug) to ~20-30 MB.
-          cat >> artifacts/mobile/android/app/build.gradle << 'GRADLE_EOF'
+          set -euo pipefail
+          # Only append if the splits block isn't already there (safe to re-run)
+          GRADLE="artifacts/mobile/android/app/build.gradle"
+          if ! grep -q "splits" "$GRADLE"; then
+            cat >> "$GRADLE" << 'GRADLE_EOF'
 
-          android {
-              splits {
-                  abi {
-                      enable true
-                      reset()
-                      include "arm64-v8a"
-                      universalApk false
-                  }
-              }
-          }
-          GRADLE_EOF
+android {
+    splits {
+        abi {
+            enable true
+            reset()
+            include "arm64-v8a"
+            universalApk false
+        }
+    }
+}
+GRADLE_EOF
+            echo "ABI split block added."
+          else
+            echo "ABI split block already present, skipping."
+          fi
 
       - name: Build release APK
         script: |
+          set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          # assembleRelease: always bundles JS (no dev-server dependency),
-          # enables R8 minification, strips debug symbols → much smaller APK.
-          ./gradlew assembleRelease --no-daemon --info 2>&1 | tail -200
+          # --stacktrace surfaces the real Babel/Metro error if bundling fails.
+          # No pipe — exit code must propagate so the step fails correctly.
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Rename APK to mali.apk
+      - name: Locate and rename APK to mali.apk
         script: |
-          RELEASE_DIR="artifacts/mobile/android/app/build/outputs/apk/release"
-          # Find the generated APK (name varies by ABI split setting)
-          APK=$(find "$RELEASE_DIR" -name "*.apk" | head -1)
-          mv "$APK" "$RELEASE_DIR/mali.apk"
-          echo "APK ready: $RELEASE_DIR/mali.apk"
-          ls -lh "$RELEASE_DIR/"
+          set -euo pipefail
+          OUTPUTS="artifacts/mobile/android/app/build/outputs"
+          echo "=== APK output tree ==="
+          find "$OUTPUTS" -name "*.apk" 2>/dev/null || echo "(no APKs found)"
+
+          # Find ANY release APK produced (ABI-split name varies)
+          APK=$(find "$OUTPUTS" -name "*release*.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No release APK found under $OUTPUTS"
+            exit 1
+          fi
+
+          DEST_DIR=$(dirname "$APK")
+          mv "$APK" "$DEST_DIR/mali.apk"
+          echo "Renamed to: $DEST_DIR/mali.apk"
+          ls -lh "$DEST_DIR/"
 
     artifacts:
-      - artifacts/mobile/android/app/build/outputs/apk/release/mali.apk
+      # Glob picks mali.apk wherever it lands under outputs
+      - artifacts/mobile/android/app/build/outputs/**/*.apk
 
     publishing:
       email:
