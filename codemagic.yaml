@@ -56,7 +56,18 @@ workflows:
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          # Save full log so we can grep the real error at the bottom on failure.
+          # pipefail + tee preserves the Gradle exit code.
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
+          EXIT=$?
+          if [ $EXIT -ne 0 ]; then
+            echo ""
+            echo "====== GRADLE ERROR SUMMARY ======"
+            grep -E "^(FAILURE|> |Caused by|error:|Could not)" /tmp/gradle.log | tail -40
+            echo "=================================="
+            exit $EXIT
+          fi
 
       - name: Locate and rename APK to mali.apk
         script: |

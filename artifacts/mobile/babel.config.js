@@ -7,12 +7,13 @@ module.exports = function (api) {
         {
           // Disable auto-detection of babel-plugin-react-compiler.
           // expo 54's babel-preset-expo enables it automatically when the
-          // package is installed, which conflicts with the reanimated/plugin
-          // worklet transforms and causes the Metro bundle to fail in CI.
+          // package is installed, which conflicts with reanimated transforms.
           reactCompiler: false,
         },
       ],
     ],
-    plugins: ["react-native-reanimated/plugin"],
+    // react-native-reanimated v4 with New Architecture (newArchEnabled:true)
+    // no longer requires the Babel plugin — it was a source of Metro crashes.
+    plugins: [],
   };
 };
