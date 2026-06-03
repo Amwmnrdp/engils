@@ -61,7 +61,7 @@ workflows:
           chmod +x gradlew
           # assembleRelease: always bundles JS (no dev-server dependency),
           # enables R8 minification, strips debug symbols → much smaller APK.
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --info 2>&1 | tail -200
 
       - name: Rename APK to mali.apk
         script: |
