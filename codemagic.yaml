@@ -28,7 +28,7 @@ workflows:
           pnpm --version
           pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Expo prebuild (generate Android native project)
+      - name: Expo prebuild
         script: |
           cd artifacts/mobile
           pnpm exec expo prebuild --platform android --clean --no-install
@@ -37,14 +37,43 @@ workflows:
         script: |
           pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Build Android APK (debug with bundled JS)
+      - name: Patch build.gradle — arm64 only, release optimisation
+        script: |
+          # Append ABI split config so the release APK targets arm64-v8a only.
+          # This alone cuts the APK from ~200 MB (all ABIs, debug) to ~20-30 MB.
+          cat >> artifacts/mobile/android/app/build.gradle << 'GRADLE_EOF'
+
+          android {
+              splits {
+                  abi {
+                      enable true
+                      reset()
+                      include "arm64-v8a"
+                      universalApk false
+                  }
+              }
+          }
+          GRADLE_EOF
+
+      - name: Build release APK
         script: |
           cd artifacts/mobile/android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon -PbundleInDebug=true
+          # assembleRelease: always bundles JS (no dev-server dependency),
+          # enables R8 minification, strips debug symbols → much smaller APK.
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK to mali.apk
+        script: |
+          RELEASE_DIR="artifacts/mobile/android/app/build/outputs/apk/release"
+          # Find the generated APK (name varies by ABI split setting)
+          APK=$(find "$RELEASE_DIR" -name "*.apk" | head -1)
+          mv "$APK" "$RELEASE_DIR/mali.apk"
+          echo "APK ready: $RELEASE_DIR/mali.apk"
+          ls -lh "$RELEASE_DIR/"
 
     artifacts:
-      - artifacts/mobile/android/app/build/outputs/apk/debug/*.apk
+      - artifacts/mobile/android/app/build/outputs/apk/release/mali.apk
 
     publishing:
       email:
