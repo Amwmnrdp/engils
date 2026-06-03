@@ -51,27 +51,39 @@ workflows:
             echo "ABI split block already present — skipping."
           fi
 
-      - name: Test Metro bundle (catch Babel errors early)
+      - name: Bundle JS with Metro (via expo export:embed)
         script: |
           set -euo pipefail
           cd artifacts/mobile
-          mkdir -p /tmp/android-assets
-          # expo export:embed mirrors what Gradle calls during assembleRelease.
-          # No --entry-file: Expo reads "main":"expo-router/entry" from package.json.
-          # Running here surfaces Babel/Metro errors fully in THIS step's log.
+
+          # Where Gradle expects the pre-built JS bundle and assets
+          ASSETS_DIR="android/app/src/main/assets"
+          RES_DIR="android/app/src/main/res"
+          mkdir -p "$ASSETS_DIR" "$RES_DIR"
+
+          # expo export:embed is the exact command Gradle calls internally.
+          # We run it here directly so the full error is visible, then tell
+          # Gradle to skip re-bundling and use this output instead.
           pnpm exec expo export:embed \
             --platform android \
             --dev false \
-            --bundle-output /tmp/index.android.bundle \
-            --assets-dest /tmp/android-assets \
+            --bundle-output "$ASSETS_DIR/index.android.bundle" \
+            --assets-dest "$RES_DIR" \
             --reset-cache
 
-      - name: Build release APK
+          echo "=== Bundle produced ==="
+          ls -lh "$ASSETS_DIR/"
+
+      - name: Build release APK (Gradle, Metro skipped)
         script: |
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
+
+          # SKIP_BUNDLING=true — tells the React Native Gradle Plugin to skip
+          # the createBundleReleaseJsAndAssets task and use the pre-built bundle
+          # we placed in android/app/src/main/assets/ above.
+          SKIP_BUNDLING=true ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/gradle.log
           EXIT=$?
           if [ $EXIT -ne 0 ]; then
             echo ""
