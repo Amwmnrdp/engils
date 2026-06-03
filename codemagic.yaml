@@ -40,28 +40,15 @@ workflows:
           set -euo pipefail
           pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Patch build.gradle — arm64 ABI split
+      - name: Patch build.gradle with arm64 ABI split
         script: |
           set -euo pipefail
-          # Only append if the splits block isn't already there (safe to re-run)
           GRADLE="artifacts/mobile/android/app/build.gradle"
           if ! grep -q "splits" "$GRADLE"; then
-            cat >> "$GRADLE" << 'GRADLE_EOF'
-
-android {
-    splits {
-        abi {
-            enable true
-            reset()
-            include "arm64-v8a"
-            universalApk false
-        }
-    }
-}
-GRADLE_EOF
+            printf '\nandroid {\n    splits {\n        abi {\n            enable true\n            reset()\n            include "arm64-v8a"\n            universalApk false\n        }\n    }\n}\n' >> "$GRADLE"
             echo "ABI split block added."
           else
-            echo "ABI split block already present, skipping."
+            echo "ABI split block already present — skipping."
           fi
 
       - name: Build release APK
@@ -69,8 +56,6 @@ GRADLE_EOF
           set -euo pipefail
           cd artifacts/mobile/android
           chmod +x gradlew
-          # --stacktrace surfaces the real Babel/Metro error if bundling fails.
-          # No pipe — exit code must propagate so the step fails correctly.
           ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Locate and rename APK to mali.apk
@@ -79,21 +64,17 @@ GRADLE_EOF
           OUTPUTS="artifacts/mobile/android/app/build/outputs"
           echo "=== APK output tree ==="
           find "$OUTPUTS" -name "*.apk" 2>/dev/null || echo "(no APKs found)"
-
-          # Find ANY release APK produced (ABI-split name varies)
           APK=$(find "$OUTPUTS" -name "*release*.apk" | head -1)
           if [ -z "$APK" ]; then
             echo "ERROR: No release APK found under $OUTPUTS"
             exit 1
           fi
-
           DEST_DIR=$(dirname "$APK")
           mv "$APK" "$DEST_DIR/mali.apk"
           echo "Renamed to: $DEST_DIR/mali.apk"
           ls -lh "$DEST_DIR/"
 
     artifacts:
-      # Glob picks mali.apk wherever it lands under outputs
       - artifacts/mobile/android/app/build/outputs/**/*.apk
 
     publishing:
