@@ -272,7 +272,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   const paidExpenses = expenses.filter((e) => e.paid);
-  const totalSpent = thisMonthUnpaid.reduce((s, e) => s + e.amount, 0);
+
+  // Paid expenses whose deadline falls in the current month — still count against this month's budget
+  const thisMonthPaid = paidExpenses.filter((e) => {
+    const { year, month } = getMonthGroup(e.deadline);
+    return year === curYear && month === curMonth;
+  });
+
+  const totalSpent =
+    thisMonthUnpaid.reduce((s, e) => s + e.amount, 0) +
+    thisMonthPaid.reduce((s, e) => s + e.amount, 0);
   const nextMonthTotal = nextMonthUnpaid.reduce((s, e) => s + e.amount, 0);
   const remainingBalance = income - totalSpent;
   const nextMonthBalance = income - nextMonthTotal;
