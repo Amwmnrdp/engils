@@ -19,6 +19,12 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const TAB_BAR_H = Platform.OS === "ios" ? 84 : 64;
 const TAB_Y = SCREEN_H - TAB_BAR_H / 2;
 
+// FAB button center (bottom: 90, left: 20, size: 58)
+const FAB_X = 20 + 29;
+const FAB_Y = SCREEN_H - 90 - 29;
+
+export type TutorialTab = "index" | "expenses" | "analytics" | "goals";
+
 interface StepConfig {
   icon: string;
   iconColor: string;
@@ -28,6 +34,7 @@ interface StepConfig {
   spotY: number;
   spotR: number;
   textPosition: "top" | "bottom";
+  tab: TutorialTab;
 }
 
 const STEPS: StepConfig[] = [
@@ -40,6 +47,7 @@ const STEPS: StepConfig[] = [
     spotY: SCREEN_H * 0.38,
     spotR: 130,
     textPosition: "bottom",
+    tab: "index",
   },
   {
     icon: "home",
@@ -50,36 +58,40 @@ const STEPS: StepConfig[] = [
     spotY: SCREEN_H * 0.38,
     spotR: 110,
     textPosition: "bottom",
+    tab: "index",
   },
   {
     icon: "credit-card",
     iconColor: "#FF6B6B",
-    title: "المصاريف",
-    description: "اضغط + لإضافة مصروف جديد.\nحدد الاسم والمبلغ والفئة والأهمية.",
-    spotX: SCREEN_W * 0.7,
-    spotY: TAB_Y,
-    spotR: 48,
+    title: "إضافة مصروف جديد",
+    description: "اضغط زر + لإضافة مصروف جديد.\nحدد الاسم والمبلغ والفئة والأهمية والموعد.",
+    spotX: FAB_X,
+    spotY: FAB_Y,
+    spotR: 44,
     textPosition: "top",
+    tab: "expenses",
   },
   {
     icon: "bar-chart-2",
     iconColor: "#8B5CF6",
-    title: "التحليل",
-    description: "رسم دائري بتوزيع مصاريفك،\ونسبة ادخارك، والمصاريف المستحقة قريباً.",
+    title: "تحليل مصاريفك",
+    description: "رسم دائري بتوزيع مصاريفك على الفئات،\ونسبة ادخارك، والمصاريف المستحقة قريباً.",
     spotX: SCREEN_W * 0.5,
-    spotY: TAB_Y,
-    spotR: 48,
-    textPosition: "top",
+    spotY: SCREEN_H * 0.32,
+    spotR: 130,
+    textPosition: "bottom",
+    tab: "analytics",
   },
   {
     icon: "target",
     iconColor: "#10B981",
-    title: "الأهداف",
-    description: "أنشئ أهدافاً ادخارية مثل سيارة أو رحلة،\nوتابع تقدمك نحو كل هدف.",
-    spotX: SCREEN_W * 0.3,
-    spotY: TAB_Y,
-    spotR: 48,
-    textPosition: "top",
+    title: "أهداف الادخار",
+    description: "أنشئ أهدافاً ادخارية مثل سيارة أو رحلة،\nوتابع تقدمك نحو كل هدف بسهولة.",
+    spotX: SCREEN_W * 0.5,
+    spotY: SCREEN_H * 0.32,
+    spotR: 130,
+    textPosition: "bottom",
+    tab: "goals",
   },
   {
     icon: "check-circle",
@@ -90,15 +102,25 @@ const STEPS: StepConfig[] = [
     spotY: SCREEN_H * 0.42,
     spotR: 90,
     textPosition: "bottom",
+    tab: "index",
   },
 ];
+
+export const TUTORIAL_STEPS = STEPS;
 
 interface OnboardingModalProps {
   visible: boolean;
   onFinish: () => void;
+  onNavigate: (tab: TutorialTab) => void;
+  onStepChange: (step: number) => void;
 }
 
-export function OnboardingModal({ visible, onFinish }: OnboardingModalProps) {
+export function OnboardingModal({
+  visible,
+  onFinish,
+  onNavigate,
+  onStepChange,
+}: OnboardingModalProps) {
   const colors = useColors();
   const [step, setStep] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -110,6 +132,8 @@ export function OnboardingModal({ visible, onFinish }: OnboardingModalProps) {
 
   useEffect(() => {
     if (visible) {
+      setStep(0);
+      onStepChange(0);
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     }
   }, [visible]);
@@ -126,12 +150,22 @@ export function OnboardingModal({ visible, onFinish }: OnboardingModalProps) {
   }, [step]);
 
   const goTo = (next: number) => {
+    const nextStep = STEPS[next];
+    const currStep = STEPS[step];
+
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
       Animated.timing(cardSlideAnim, { toValue: 20, duration: 150, useNativeDriver: true }),
     ]).start(() => {
+      // Navigate to the correct tab if it changes
+      if (nextStep && nextStep.tab !== currStep.tab) {
+        onNavigate(nextStep.tab);
+      }
+
       setStep(next);
+      onStepChange(next);
       cardSlideAnim.setValue(30);
+
       Animated.parallel([
         Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
         Animated.timing(cardSlideAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
